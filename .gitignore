@@ -1,0 +1,33 @@
+# General
+.DS_Store
+*.log
+*.tmp
+*.swp
+*.swo
+*.orig
+
+# Node/TypeScript
+node_modules/
+*.tsbuildinfo
+dist/
+out/
+
+# Next.js
+.next/
+next-env.d.ts
+
+# Env files (never commit real secrets)
+.env
+.env.*
+!.env.example
+
+# Web app specific
+web/.next/
+web/node_modules/
+web/dist/
+web/out/
+web/tsconfig.tsbuildinfo
+web/.env
+web/.env.*
+!web/.env.example
+

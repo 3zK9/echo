@@ -1,0 +1,26 @@
+@import "tailwindcss";
+
+@theme inline {
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+/* Dark, unique background */
+body {
+  background-color: #0b0f19;
+  background-image:
+    radial-gradient(ellipse at top left, rgba(99,102,241,0.12), transparent 60%),
+    radial-gradient(ellipse at bottom right, rgba(14,165,233,0.12), transparent 60%),
+    radial-gradient(circle at 10px 10px, rgba(255,255,255,0.03) 1px, transparent 1px);
+  background-size: 100% 100%, 100% 100%, 24px 24px;
+  color: #e5e7eb;
+}
+
+@layer components {
+  .panel {
+    @apply rounded-2xl bg-white/5 border border-white/10 backdrop-blur shadow-xl shadow-black/30;
+  }
+  .btn-primary {
+    @apply rounded-full text-white font-semibold px-5 py-3 bg-gradient-to-r from-violet-500 to-sky-500 hover:from-violet-400 hover:to-sky-400 transition;
+  }
+}
