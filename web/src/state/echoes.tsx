@@ -20,6 +20,7 @@ const EchoesContext = createContext<EchoesContextType | undefined>(undefined);
 
 export function EchoesProvider({ children }: { children: React.ReactNode }) {
   const [echoes, setEchoes] = useState<Echo[]>([]);
+  const STORAGE_KEY = "echo_feed_v1";
 
   const refresh = useCallback(async () => {
     try {
@@ -31,41 +32,133 @@ export function EchoesProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
+    // Show cached feed immediately if present
+    try {
+      const raw = typeof window !== "undefined" ? localStorage.getItem(STORAGE_KEY) : null;
+      if (raw) {
+        const parsed = JSON.parse(raw) as Echo[];
+        if (Array.isArray(parsed)) setEchoes(parsed);
+      }
+    } catch {}
     refresh();
   }, [refresh]);
 
+  useEffect(() => {
+    try {
+      if (typeof window !== "undefined") localStorage.setItem(STORAGE_KEY, JSON.stringify(echoes));
+    } catch {}
+  }, [echoes]);
+
   const addEcho: EchoesContextType["addEcho"] = async (t) => {
+    // Optimistic insert with temp id
+    const tempId = `temp_${Math.random().toString(36).slice(2)}`;
+    const optimistic: Echo = {
+      id: tempId,
+      name: t.name,
+      handle: t.handle,
+      time: "now",
+      text: t.text,
+      likes: 0,
+      reposts: 0,
+      liked: false,
+      reposted: false,
+      avatarUrl: t.avatarUrl,
+    };
+    setEchoes((prev) => [optimistic, ...prev]);
     try {
       const res = await fetch("/api/echoes", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: t.text, originalId: t.originalId }) });
-      if (!res.ok) return;
+      if (!res.ok) throw new Error("create_failed");
       const created = (await res.json()) as Echo;
-      setEchoes((prev) => [created, ...prev]);
-    } catch {}
+      setEchoes((prev) => prev.map((e) => (e.id === tempId ? created : e)));
+    } catch {
+      // rollback
+      setEchoes((prev) => prev.filter((e) => e.id !== tempId));
+    }
   };
 
   const toggleLike = async (id: string) => {
+    // Optimistic flip
+    let rollback: Echo | null = null;
+    setEchoes((prev) => prev.map((t) => {
+      if (t.id !== id) return t;
+      rollback = t;
+      const liked = !t.liked;
+      const likes = Math.max(0, (t.likes || 0) + (liked ? 1 : -1));
+      return { ...t, liked, likes };
+    }));
     try {
       const res = await fetch(`/api/echoes/${id}/like`, { method: "POST" });
-      if (!res.ok) return;
+      if (!res.ok) throw new Error("like_failed");
       const { likes, liked } = await res.json();
       setEchoes((prev) => prev.map((t) => (t.id === id ? { ...t, liked, likes } : t)));
-    } catch {}
+    } catch {
+      // rollback
+      if (rollback) setEchoes((prev) => prev.map((t) => (t.id === id ? rollback! : t)));
+    }
   };
 
   const toggleRepost = async (id: string) => {
+    // Optimistic flip
+    let rollback: Echo | null = null;
+    setEchoes((prev) => prev.map((t) => {
+      if (t.id !== id) return t;
+      rollback = t;
+      const reposted = !t.reposted;
+      const reposts = Math.max(0, (t.reposts || 0) + (reposted ? 1 : -1));
+      return { ...t, reposted, reposts };
+    }));
     try {
       const res = await fetch(`/api/echoes/${id}/repost`, { method: "POST" });
-      if (!res.ok) return;
-      await refresh();
-    } catch {}
+      if (!res.ok) throw new Error("repost_failed");
+      const { reposts, reposted } = await res.json();
+      setEchoes((prev) => prev.map((t) => (t.id === id ? { ...t, reposted, reposts } : t)));
+    } catch {
+      if (rollback) setEchoes((prev) => prev.map((t) => (t.id === id ? rollback! : t)));
+    }
   };
 
-  const addRepost: EchoesContextType["addRepost"] = async (original) => {
-    await toggleRepost(original.id);
+  const addRepost: EchoesContextType["addRepost"] = async (original, by) => {
+    // Optimistically add a repost item to the top
+    const tempId = `re_${original.id}_${Math.random().toString(36).slice(2)}`;
+    const repost: Echo = {
+      id: tempId,
+      name: by.name,
+      handle: by.handle,
+      time: "now",
+      text: "",
+      likes: original.likes,
+      reposts: (original.reposts || 0) + 1,
+      liked: original.liked,
+      reposted: true,
+      avatarUrl: by.avatarUrl,
+      originalId: original.id,
+      isRepost: true,
+      canDelete: false,
+    };
+    setEchoes((prev) => [repost, ...prev.map((t) => (t.id === original.id ? { ...t, reposted: true, reposts: (t.reposts || 0) + 1 } : t))]);
+    try {
+      const res = await fetch(`/api/echoes/${original.id}/repost`, { method: "POST" });
+      if (!res.ok) throw new Error();
+      const { reposts, reposted } = await res.json();
+      setEchoes((prev) => prev.map((t) => (t.id === original.id ? { ...t, reposted, reposts } : t)));
+    } catch {
+      // rollback
+      setEchoes((prev) => prev.filter((t) => t.id !== tempId).map((t) => (t.id === original.id ? { ...t, reposted: false, reposts: Math.max(0, (t.reposts || 0) - 1) } : t)));
+    }
   };
 
-  const removeRepost: EchoesContextType["removeRepost"] = async (originalId) => {
-    await toggleRepost(originalId);
+  const removeRepost: EchoesContextType["removeRepost"] = async (originalId, handle) => {
+    // Optimistically remove my repost item and update counts
+    setEchoes((prev) => prev.filter((t) => !(t.originalId === originalId && t.handle === handle)).map((t) => (t.id === originalId ? { ...t, reposted: false, reposts: Math.max(0, (t.reposts || 0) - 1) } : t)));
+    try {
+      const res = await fetch(`/api/echoes/${originalId}/repost`, { method: "POST" });
+      if (!res.ok) throw new Error();
+      const { reposts, reposted } = await res.json();
+      setEchoes((prev) => prev.map((t) => (t.id === originalId ? { ...t, reposted, reposts } : t)));
+    } catch {
+      // rollback: can't reconstruct removed temp repost reliably; refresh feed
+      refresh();
+    }
   };
 
   const hasRepostBy: EchoesContextType["hasRepostBy"] = (originalId, handle) => {
@@ -80,7 +173,8 @@ export function EchoesProvider({ children }: { children: React.ReactNode }) {
     try {
       const res = await fetch(`/api/echoes/${id}`, { method: "DELETE" });
       if (!res.ok) return false;
-      setEchoes((prev) => prev.filter((t) => t.id !== id));
+      // Remove the original and any repost items that reference it
+      setEchoes((prev) => prev.filter((t) => t.id !== id && t.originalId !== id));
       return true;
     } catch {
       return false;

@@ -1,5 +1,6 @@
 "use client";
 
+import React from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
@@ -21,7 +22,7 @@ export type Echo = {
   canDelete?: boolean;
 };
 
-export default function EchoItem({
+function EchoItem({
   t,
   onLike,
   onRepost,
@@ -86,10 +87,14 @@ export default function EchoItem({
         />
       </div>
       <div className="flex-1 min-w-0">
-        {t.isRepost && (
+        {(t.isRepost || repostedByMe) && (
           <div className="-mt-1 mb-1 flex items-center gap-2 text-xs text-green-600 dark:text-green-400">
             <RetweetIcon className="w-4 h-4" />
-            <span>{isMine ? "Reposted by You" : "Reposted"}</span>
+            <span>
+              {t.isRepost
+                ? (isMine ? "Reposted by You" : "Reposted")
+                : "You reposted"}
+            </span>
           </div>
         )}
         <header className="flex items-center gap-2 text-sm">
@@ -126,7 +131,7 @@ export default function EchoItem({
             <UploadIcon className="w-5 h-5" />
             <span className="sr-only">Share</span>
           </button>
-          {isMine && (
+          {isMine && !t.isRepost && (
             <button type="button" onClick={() => onDelete?.(t.id)} className="inline-flex items-center gap-2 hover:text-red-500">
               <TrashIcon className="w-5 h-5" />
               <span className="sr-only">Delete</span>
@@ -137,3 +142,5 @@ export default function EchoItem({
     </article>
   );
 }
+
+export default React.memo(EchoItem);

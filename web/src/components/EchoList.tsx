@@ -18,21 +18,43 @@ export default function EchoList({ items }: { items: Echo[] }) {
   }, [items]);
 
   const toggleLike = async (id: string) => {
+    // optimistic
+    let old: Echo | null = null;
+    setEchoes((prev) => prev.map((t) => {
+      if (t.id !== id) return t;
+      old = t;
+      const liked = !t.liked;
+      const likes = Math.max(0, (t.likes || 0) + (liked ? 1 : -1));
+      return { ...t, liked, likes };
+    }));
     try {
       const res = await fetch(`/api/echoes/${id}/like`, { method: "POST" });
-      if (!res.ok) return;
+      if (!res.ok) throw new Error();
       const { likes, liked } = await res.json();
       setEchoes((prev) => prev.map((t) => (t.id === id ? { ...t, liked, likes } : t)));
-    } catch {}
+    } catch {
+      if (old) setEchoes((prev) => prev.map((t) => (t.id === id ? old! : t)));
+    }
   };
 
   const toggleRepost = async (id: string) => {
+    // optimistic
+    let old: Echo | null = null;
+    setEchoes((prev) => prev.map((t) => {
+      if (t.id !== id) return t;
+      old = t;
+      const reposted = !t.reposted;
+      const reposts = Math.max(0, (t.reposts || 0) + (reposted ? 1 : -1));
+      return { ...t, reposted, reposts };
+    }));
     try {
       const res = await fetch(`/api/echoes/${id}/repost`, { method: "POST" });
-      if (!res.ok) return;
+      if (!res.ok) throw new Error();
       const { reposts, reposted } = await res.json();
       setEchoes((prev) => prev.map((t) => (t.id === id ? { ...t, reposts, reposted } : t)));
-    } catch {}
+    } catch {
+      if (old) setEchoes((prev) => prev.map((t) => (t.id === id ? old! : t)));
+    }
   };
 
   const onShare = async (id: string) => {
@@ -60,7 +82,7 @@ export default function EchoList({ items }: { items: Echo[] }) {
     try {
       const res = await fetch(`/api/echoes/${id}`, { method: "DELETE" });
       if (!res.ok) { show("Failed to delete echo"); return; }
-      setEchoes((prev) => prev.filter((t) => t.id !== id));
+      setEchoes((prev) => prev.filter((t) => t.id !== id && t.originalId !== id));
       show("Echo deleted");
     } catch {
       show("Failed to delete echo");

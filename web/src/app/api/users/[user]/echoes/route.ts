@@ -15,7 +15,7 @@ function relTime(d: Date) {
   return `${Math.floor(diff / 86400)}d`;
 }
 
-export async function GET(_: Request, { params }: { params: Promise<{ user: string }> }) {
+export async function GET(req: Request, { params }: { params: Promise<{ user: string }> }) {
   try {
     const { user } = await params;
     let u = await prisma.user.findFirst({ where: { username: user } });
@@ -30,25 +30,53 @@ export async function GET(_: Request, { params }: { params: Promise<{ user: stri
         }
       }
     }
-    if (!u) return NextResponse.json([], { status: 200 });
-    const echoes = await prisma.echo.findMany({ where: { authorId: u.id }, orderBy: { createdAt: "desc" }, include: { author: { select: { name: true, username: true, image: true } }, _count: { select: { likes: true, reposts: true } } } });
-    const rows = echoes.map((t) => ({
-      id: t.id,
-      name: t.author?.name || t.author?.username || "User",
-      handle: t.author?.username || sanitizeHandle(t.author?.name || undefined),
-      time: relTime(t.createdAt as Date),
-      text: t.text,
-      likes: t._count?.likes ?? 0,
-      reposts: t._count?.reposts ?? 0,
-      liked: false,
-      reposted: false,
-      avatarUrl: t.author?.image || undefined,
-      originalId: t.originalId || undefined,
-      isRepost: !!t.originalId,
-      canDelete: !!meId && t.authorId === meId,
-    }));
-    return NextResponse.json(rows, { headers: { "Cache-Control": "private, max-age=15" } });
+    if (!u) return NextResponse.json({ items: [], nextCursor: null }, { status: 200 });
+
+    const url = new URL(req.url);
+    const limit = Math.max(1, Math.min(50, parseInt(url.searchParams.get("limit") || "20", 10)));
+    const cursor = url.searchParams.get("cursor") || undefined;
+
+    const echoes = await prisma.echo.findMany({
+      where: { authorId: u.id },
+      orderBy: { id: "desc" },
+      take: limit + 1,
+      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+      include: {
+        author: { select: { name: true, username: true, image: true } },
+        _count: { select: { likes: true, reposts: true } },
+        original: {
+          include: {
+            author: { select: { name: true, username: true, image: true } },
+            _count: { select: { likes: true, reposts: true } },
+          },
+        },
+      },
+    });
+    const hasMore = echoes.length > limit;
+    const page = hasMore ? echoes.slice(0, limit) : echoes;
+    const rows = page
+      .filter((t) => !t.originalId || !!t.original)
+      .map((t) => {
+        const display = t.original ?? t;
+        return {
+          id: t.originalId || t.id,
+          name: display.author?.name || display.author?.username || "User",
+          handle: display.author?.username || sanitizeHandle(display.author?.name || undefined),
+          time: relTime((display.createdAt as Date) || (t.createdAt as Date)),
+          text: display.text,
+          likes: display._count?.likes ?? 0,
+          reposts: display._count?.reposts ?? 0,
+          liked: false,
+          reposted: false,
+          avatarUrl: display.author?.image || undefined,
+          originalId: t.originalId || undefined,
+          isRepost: !!t.originalId,
+          canDelete: !!meId && !t.originalId && t.authorId === meId,
+        };
+      });
+    const nextCursor = hasMore ? echoes[limit].id : null;
+    return NextResponse.json({ items: rows, nextCursor }, { headers: { "Cache-Control": "private, max-age=15" } });
   } catch (e) {
-    return NextResponse.json([], { headers: { "Cache-Control": "private, max-age=5", "x-db-error": "unreachable" } });
+    return NextResponse.json({ items: [], nextCursor: null }, { headers: { "Cache-Control": "private, max-age=5", "x-db-error": "unreachable" } });
   }
 }

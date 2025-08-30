@@ -17,21 +17,23 @@ function relTime(d: Date) {
 }
 
 function mapEchoRow(t: any, likedSet: Set<string>, repostedSet: Set<string>, meId?: string) {
-  const handle = t.author?.username || sanitizeHandle(t.author?.name || undefined);
+  const baseId = t.originalId || t.id;
+  const display = t.original ?? t;
+  const handle = display.author?.username || sanitizeHandle(display.author?.name || undefined);
   return {
-    id: t.id,
-    name: t.author?.name || t.author?.username || "User",
+    id: baseId,
+    name: display.author?.name || display.author?.username || "User",
     handle,
-    time: relTime(t.createdAt as Date),
-    text: t.text,
-    likes: t._count?.likes ?? 0,
-    reposts: t._count?.reposts ?? 0,
-    liked: likedSet.has(t.id),
-    reposted: repostedSet.has(t.id),
-    avatarUrl: t.author?.image || undefined,
+    time: relTime((display.createdAt as Date) || (t.createdAt as Date)),
+    text: display.text,
+    likes: display._count?.likes ?? 0,
+    reposts: display._count?.reposts ?? 0,
+    liked: likedSet.has(baseId),
+    reposted: repostedSet.has(baseId),
+    avatarUrl: display.author?.image || undefined,
     originalId: t.originalId || undefined,
     isRepost: !!t.originalId,
-    canDelete: !!meId && t.authorId === meId,
+    canDelete: !!meId && !t.originalId && t.authorId === meId,
   };
 }
 
@@ -45,18 +47,34 @@ export async function GET() {
       include: {
         author: { select: { name: true, username: true, image: true } },
         _count: { select: { likes: true, reposts: true } },
+        original: {
+          include: {
+            author: { select: { name: true, username: true, image: true } },
+            _count: { select: { likes: true, reposts: true } },
+          },
+        },
       },
     });
-    const ids = echoes.map((e) => e.id);
+    const baseIds = echoes.map((e) => e.originalId || e.id);
     const likedSet = new Set<string>();
     const repostedSet = new Set<string>();
-    if (meId && ids.length) {
-      const likes = await prisma.echoLike.findMany({ where: { userId: meId, echoId: { in: ids } }, select: { echoId: true } });
+    if (meId && baseIds.length) {
+      const likes = await prisma.echoLike.findMany({ where: { userId: meId, echoId: { in: baseIds } }, select: { echoId: true } });
       likes.forEach((l) => likedSet.add(l.echoId));
-      const reposts = await prisma.echo.findMany({ where: { authorId: meId, originalId: { in: ids } }, select: { originalId: true } });
+      const reposts = await prisma.echo.findMany({ where: { authorId: meId, originalId: { in: baseIds } }, select: { originalId: true } });
       reposts.forEach((r) => r.originalId && repostedSet.add(r.originalId));
     }
-    const rows = echoes.map((t) => mapEchoRow(t, likedSet, repostedSet, meId));
+    const rawRows = echoes
+      .filter((t) => !t.originalId || !!t.original) // drop orphan reposts where original is deleted
+      .map((t) => mapEchoRow(t, likedSet, repostedSet, meId));
+    // Deduplicate by base id, keep the first (most recent) occurrence
+    const seen = new Set<string>();
+    const rows: any[] = [];
+    for (const r of rawRows) {
+      if (seen.has(r.id)) continue;
+      seen.add(r.id);
+      rows.push(r);
+    }
     return NextResponse.json(rows, { headers: { "Cache-Control": "private, max-age=10" } });
   } catch (e) {
     return NextResponse.json([], { headers: { "Cache-Control": "private, max-age=5", "x-db-error": "unreachable" } });

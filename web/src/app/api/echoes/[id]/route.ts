@@ -15,6 +15,8 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
   if (!echo) return NextResponse.json({ ok: true }, { status: 200 });
   if (echo.authorId !== meId) return NextResponse.json({ error: "forbidden" }, { status: 403 });
 
+  // Remove any reposts that reference this echo to avoid orphaned reposts
+  await prisma.echo.deleteMany({ where: { originalId: id } });
   await prisma.echo.delete({ where: { id } });
   return NextResponse.json({ ok: true });
 }

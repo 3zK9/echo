@@ -15,7 +15,7 @@ function relTime(d: Date) {
   return `${Math.floor(diff / 86400)}d`;
 }
 
-export async function GET(_: Request, { params }: { params: Promise<{ user: string }> }) {
+export async function GET(req: Request, { params }: { params: Promise<{ user: string }> }) {
   try {
     const { user } = await params;
     let u = await prisma.user.findFirst({ where: { username: user } });
@@ -30,29 +30,43 @@ export async function GET(_: Request, { params }: { params: Promise<{ user: stri
         }
       }
     }
-    if (!u) return NextResponse.json([], { status: 200 });
+    if (!u) return NextResponse.json({ items: [], nextOffset: null }, { status: 200 });
+
+    const url = new URL(req.url);
+    const limit = Math.max(1, Math.min(50, parseInt(url.searchParams.get("limit") || "20", 10)));
+    const offset = Math.max(0, parseInt(url.searchParams.get("offset") || "0", 10));
+
     const likes = await prisma.echoLike.findMany({
       where: { userId: u.id },
       orderBy: { createdAt: "desc" },
-      include: { echo: { include: { author: { select: { name: true, username: true, image: true } }, _count: { select: { likes: true, reposts: true } } } } },
+      skip: offset,
+      take: limit,
+      include: { echo: { include: { author: { select: { name: true, username: true, image: true } }, _count: { select: { likes: true, reposts: true } }, original: { include: { author: { select: { name: true, username: true, image: true } }, _count: { select: { likes: true, reposts: true } } } } } } },
     });
-    const rows = likes.map((l) => ({
-      id: l.echo.id,
-      name: l.echo.author?.name || l.echo.author?.username || "User",
-      handle: l.echo.author?.username || sanitizeHandle(l.echo.author?.name || undefined),
-      time: relTime(l.echo.createdAt as Date),
-      text: l.echo.text,
-      likes: l.echo._count?.likes ?? 0,
-      reposts: l.echo._count?.reposts ?? 0,
-      liked: true,
-      reposted: false,
-      avatarUrl: l.echo.author?.image || undefined,
-      originalId: l.echo.originalId || undefined,
-      isRepost: !!l.echo.originalId,
-      canDelete: !!meId && l.echo.authorId === meId,
-    }));
-    return NextResponse.json(rows, { headers: { "Cache-Control": "private, max-age=15" } });
+    const rows = likes
+      .filter((l) => !l.echo.originalId || !!l.echo.original)
+      .map((l) => {
+        const e = l.echo;
+        const display = e.original ?? e;
+        return {
+          id: e.originalId || e.id,
+          name: display.author?.name || display.author?.username || "User",
+          handle: display.author?.username || sanitizeHandle(display.author?.name || undefined),
+          time: relTime((display.createdAt as Date) || (e.createdAt as Date)),
+          text: display.text,
+          likes: display._count?.likes ?? 0,
+          reposts: display._count?.reposts ?? 0,
+          liked: true,
+          reposted: false,
+          avatarUrl: display.author?.image || undefined,
+          originalId: e.originalId || undefined,
+          isRepost: !!e.originalId,
+          canDelete: !!meId && !e.originalId && e.authorId === meId,
+        };
+      });
+    const nextOffset = rows.length === limit ? offset + limit : null;
+    return NextResponse.json({ items: rows, nextOffset }, { headers: { "Cache-Control": "private, max-age=15" } });
   } catch (e) {
-    return NextResponse.json([], { headers: { "Cache-Control": "private, max-age=5", "x-db-error": "unreachable" } });
+    return NextResponse.json({ items: [], nextOffset: null }, { headers: { "Cache-Control": "private, max-age=5", "x-db-error": "unreachable" } });
   }
 }

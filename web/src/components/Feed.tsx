@@ -136,8 +136,8 @@ export default function Feed({
         {displayed.map((t) => {
           const baseId = t.originalId ?? t.id;
           const me = session?.user?.username || "you";
-          const repostedByMe = hasRepostBy(baseId, me);
           const base = echoes.find((x) => x.id === baseId) || t;
+          const repostedByMe = !!base.reposted || hasRepostBy(baseId, me);
           const likeHandler = () => toggleLike(baseId);
           const repostHandler = () => onRepost(baseId);
           const shareHandler = () => onShare(baseId);

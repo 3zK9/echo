@@ -17,21 +17,25 @@ export default function ProfileHeader({
   displayName,
   avatar,
   canEdit,
+  initialBio,
+  initialLink,
 }: {
   username: string;
   displayName: string;
   avatar: string;
   canEdit: boolean;
+  initialBio?: string;
+  initialLink?: string | null;
 }) {
   const { getBio, setBio, getLink, setLink } = useProfile();
   const { show } = useToast();
   const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState<string>(getBio(username).slice(0, MAX_BIO));
-  const bio = getBio(username);
+  const [draft, setDraft] = useState<string>((initialBio ?? getBio(username)).slice(0, MAX_BIO));
+  const bio = initialBio ?? getBio(username);
   const [editingLink, setEditingLink] = useState(false);
-  const [linkDraft, setLinkDraft] = useState<string>(getLink(username) || "");
-  const link = getLink(username);
-  const [loading, setLoading] = useState<boolean>(true);
+  const [linkDraft, setLinkDraft] = useState<string>((initialLink ?? getLink(username)) || "");
+  const link = (initialLink ?? getLink(username)) || null;
+  const [loading, setLoading] = useState<boolean>(!(initialBio !== undefined || initialLink !== undefined));
 
   const onSave = async () => {
     const trimmed = draft.trim();
@@ -82,6 +86,15 @@ export default function ProfileHeader({
 
   // Sync from server when viewing a profile, to populate local cache
   useEffect(() => {
+    if (initialBio !== undefined || initialLink !== undefined) {
+      // Seed local cache and skip network fetch
+      if (typeof initialBio === "string") setBio(username, initialBio);
+      if (typeof initialLink === "string" || initialLink === null) setLink(username, initialLink ?? null);
+      setLoading(false);
+      setDraft((initialBio || "").slice(0, MAX_BIO));
+      setLinkDraft(initialLink || "");
+      return;
+    }
     let cancelled = false;
     const load = async () => {
       try {
