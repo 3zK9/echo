@@ -3,8 +3,8 @@
 import React, { useState } from "react";
 import { useSession } from "next-auth/react";
 import Compose from "@/components/Compose";
-import TweetItem, { type Tweet } from "@/components/Tweet";
-import { useTweets } from "@/state/tweets";
+import EchoItem, { type Echo } from "@/components/Echo";
+import { useEchoes } from "@/state/echoes";
 import { useToast } from "@/components/Toast";
 
 export default function Feed({
@@ -20,7 +20,7 @@ export default function Feed({
   mineUsername?: string;
   emptyMessage?: string;
 }) {
-  const { tweets, addTweet, toggleLike, addRetweet, removeRetweet, hasRetweetBy, incRetweets, decRetweets } = useTweets();
+  const { echoes, addEcho, toggleLike, addRepost, removeRepost, hasRepostBy, incReposts, decReposts } = useEchoes();
   const { data: session } = useSession();
   const { show } = useToast();
   const [composePrefill, setComposePrefill] = useState<string>("");
@@ -29,46 +29,61 @@ export default function Feed({
     const name = session?.user?.name || "You";
     const avatarUrl = session?.user?.image || undefined;
     const handle = session?.user?.username || (name || "you").toLowerCase().replace(/[^a-z0-9_]+/g, "").slice(0, 12) || "you";
-    const t: Omit<Tweet, "id"> = {
+    const t: Omit<Echo, "id"> = {
       name,
       handle,
       time: "now",
       text,
       likes: 0,
-      retweets: 0,
+      reposts: 0,
       liked: false,
-      retweeted: false,
+      reposted: false,
       avatarUrl,
     };
-    addTweet(t);
+    addEcho(t);
   };
 
-  const displayed = tweets.filter((t) => {
+  const meUsername = (typeof session?.user?.username === "string" ? session.user.username : undefined);
+  const meName = (typeof session?.user?.name === "string" ? session.user.name : undefined);
+  const meFallback = meName ? meName.toLowerCase().replace(/[^a-z0-9_]+/g, "").slice(0, 12) : undefined;
+
+  const displayed = echoes.filter((t) => {
     if (filter === "likes") return !!t.liked;
     if (filter === "mine") {
       if (!mineUsername) return false;
-      return t.handle?.toLowerCase() === mineUsername.toLowerCase();
+      // If viewing our own profile, also include historical local echoes that used fallbacks like "you" or sanitized name
+      const viewingOwn = meUsername && meUsername.toLowerCase() === mineUsername.toLowerCase();
+      if (viewingOwn) {
+        const candidates = new Set([
+          mineUsername.toLowerCase(),
+          "you",
+          meFallback || "",
+        ].filter(Boolean));
+        return candidates.has((t.handle || "").toLowerCase());
+      }
+      // Otherwise strict match to the target username
+      return (t.handle || "").toLowerCase() === mineUsername.toLowerCase();
     }
     return true;
   });
 
-  const onRetweet = (id: string) => {
+  const onRepost = (id: string) => {
     const name = session?.user?.name || "You";
     const avatarUrl = session?.user?.image || undefined;
     const handle = session?.user?.username || (name || "you").toLowerCase().replace(/[^a-z0-9_]+/g, "").slice(0, 12) || "you";
-    const target = tweets.find((t) => t.id === id);
+    const target = echoes.find((t) => t.id === id);
     if (!target) return;
     const baseId = target.originalId ?? target.id;
-    const original = tweets.find((t) => t.id === baseId);
+    const original = echoes.find((t) => t.id === baseId);
     if (!original) return;
 
-    const already = hasRetweetBy(baseId, handle);
+    const already = hasRepostBy(baseId, handle);
     if (already) {
-      removeRetweet(baseId, handle);
-      decRetweets(baseId);
+      removeRepost(baseId, handle);
+      decReposts(baseId);
     } else {
-      addRetweet(original, { name, handle, avatarUrl });
-      incRetweets(baseId);
+      addRepost(original, { name, handle, avatarUrl });
+      incReposts(baseId);
     }
   };
 
@@ -112,26 +127,26 @@ export default function Feed({
         {displayed.map((t) => {
           const baseId = t.originalId ?? t.id;
           const me = session?.user?.username || "you";
-          const retweetedByMe = hasRetweetBy(baseId, me);
-          const base = tweets.find((x) => x.id === baseId) || t;
+          const repostedByMe = hasRepostBy(baseId, me);
+          const base = echoes.find((x) => x.id === baseId) || t;
           const likeHandler = () => toggleLike(baseId);
-          const retweetHandler = () => onRetweet(baseId);
+          const repostHandler = () => onRepost(baseId);
           const shareHandler = () => onShare(baseId);
           const replyHandler = () => {
             setComposePrefill(`@${base.handle} `);
             if (window.location.hash !== "#compose") window.location.hash = "compose";
           };
           return (
-            <TweetItem
+            <EchoItem
               key={t.id}
               t={t}
               onLike={likeHandler}
-              onRetweet={retweetHandler}
+              onRepost={repostHandler}
               onShare={shareHandler}
               onReply={replyHandler}
-              retweetedByMe={retweetedByMe}
+              repostedByMe={repostedByMe}
               likesCount={base.likes}
-              retweetsCount={base.retweets}
+              repostsCount={base.reposts}
               likedByMe={base.liked}
             />
           );

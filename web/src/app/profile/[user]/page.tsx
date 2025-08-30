@@ -1,10 +1,15 @@
 import Sidebar from "@/components/Sidebar";
-import Feed from "@/components/Feed";
 import Link from "next/link";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/auth.config";
 import ProfileHeader from "@/components/ProfileHeader";
+import ProfileFeed from "@/components/ProfileFeed";
 import { redirect } from "next/navigation";
+import { prisma } from "@/lib/db";
+
+function sanitizeHandle(name?: string) {
+  return (name || "user").toLowerCase().replace(/[^a-z0-9_]+/g, "").slice(0, 12) || "user";
+}
 
 export default async function UserProfilePage({
   params,
@@ -25,10 +30,17 @@ export default async function UserProfilePage({
   }
   const p = await params;
   const username = decodeURIComponent(p.user);
-  const isMe = !!session?.user?.username && session.user.username.toLowerCase() === username.toLowerCase();
+  const unameLower = username.toLowerCase();
+  const meUsername = (session?.user?.username || "").toLowerCase();
+  const fallback = sanitizeHandle(session?.user?.name as string | undefined);
+  const isMe = !!session && (
+    (!!meUsername && meUsername === unameLower) ||
+    (!!fallback && fallback === unameLower) ||
+    unameLower === "you"
+  );
   const displayName = isMe ? (session?.user?.name || username) : username;
   const avatar = isMe
-    ? (session?.user?.image || `https://api.dicebear.com/9.x/identicon/png?seed=${encodeURIComponent(username.toLowerCase())}`)
+    ? (session?.user?.image || `https://api.dicebear.com/9.x/identicon/png?seed=${encodeURIComponent((meUsername || username).toLowerCase())}`)
     : `https://api.dicebear.com/9.x/identicon/png?seed=${encodeURIComponent(username.toLowerCase())}`;
 
   const makeHref = (t: "echoes" | "likes") => {
@@ -67,11 +79,8 @@ export default async function UserProfilePage({
             </div>
           </div>
 
-          {tab === "echoes" ? (
-            <Feed title="Echoes" showCompose={false} filter="mine" mineUsername={username} emptyMessage={`@${username} hasn't echoed yet.`} />
-          ) : (
-            <Feed title="Likes" showCompose={false} filter="likes" emptyMessage={`@${username} hasn't liked anything yet.`} />
-          )}
+          <header className="px-4 py-3 text-xl font-bold sticky top-[109px] z-10 bg-white/70 dark:bg-black/50 backdrop-blur border-b border-black/10 dark:border-white/10">{tab === "echoes" ? "Echoes" : "Likes"}</header>
+          <ProfileFeed username={username} tab={tab} />
         </section>
       </main>
     </div>

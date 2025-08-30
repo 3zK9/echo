@@ -20,7 +20,7 @@ const NavItem = ({ label, href, icon }: { label: string; href: string; icon?: Re
 export default function Sidebar() {
   const { data: session } = useSession();
   const user = session?.user;
-  const username = user?.username;
+  const username = user?.username || (user?.name ? user.name.toLowerCase().replace(/[^a-z0-9_]+/g, "").slice(0, 12) : undefined);
   return (
     <div className="sticky top-4">
       <div className="panel p-4">

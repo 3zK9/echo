@@ -5,39 +5,39 @@ import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { ReplyIcon, RetweetIcon, HeartIcon, UploadIcon } from "@/components/icons";
 
-export type Tweet = {
+export type Echo = {
   id: string;
   name: string;
   handle: string;
   time: string;
   text: string;
   likes: number;
-  retweets: number;
+  reposts: number;
   liked?: boolean;
-  retweeted?: boolean;
+  reposted?: boolean;
   avatarUrl?: string;
   originalId?: string;
-  isRetweet?: boolean;
+  isRepost?: boolean;
 };
 
-export default function TweetItem({
+export default function EchoItem({
   t,
   onLike,
-  onRetweet,
+  onRepost,
   onShare,
-  retweetedByMe,
+  repostedByMe,
   likesCount,
-  retweetsCount,
+  repostsCount,
   likedByMe,
   onReply,
 }: {
-  t: Tweet;
+  t: Echo;
   onLike?: (id: string) => void;
-  onRetweet?: (id: string) => void;
+  onRepost?: (id: string) => void;
   onShare?: (id: string) => void;
-  retweetedByMe?: boolean;
+  repostedByMe?: boolean;
   likesCount?: number;
-  retweetsCount?: number;
+  repostsCount?: number;
   likedByMe?: boolean;
   onReply?: (id: string) => void;
 }) {
@@ -83,10 +83,10 @@ export default function TweetItem({
         />
       </div>
       <div className="flex-1 min-w-0">
-        {t.isRetweet && (
+        {t.isRepost && (
           <div className="-mt-1 mb-1 flex items-center gap-2 text-xs text-green-600 dark:text-green-400">
             <RetweetIcon className="w-4 h-4" />
-            <span>{isMine ? "Retweeted by You" : "Retweeted"}</span>
+            <span>{isMine ? "Reposted by You" : "Reposted"}</span>
           </div>
         )}
         <header className="flex items-center gap-2 text-sm">
@@ -103,12 +103,12 @@ export default function TweetItem({
           </button>
           <button
             type="button"
-            onClick={() => onRetweet?.(t.id)}
-            className={`inline-flex items-center gap-2 hover:text-green-500 ${retweetedByMe ? "text-green-600" : ""}`}
-            aria-pressed={!!retweetedByMe}
+            onClick={() => onRepost?.(t.id)}
+            className={`inline-flex items-center gap-2 hover:text-green-500 ${repostedByMe ? "text-green-600" : ""}`}
+            aria-pressed={!!repostedByMe}
           >
             <RetweetIcon className="w-5 h-5" />
-            {retweetsCount && retweetsCount > 0 ? retweetsCount : ""}
+            {repostsCount && repostsCount > 0 ? repostsCount : ""}
           </button>
           <button
             type="button"

@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "Echo",
-  description: "A minimal Twitter-like UI",
+  description: "A minimal Echo app",
 };
 
 export default function RootLayout({

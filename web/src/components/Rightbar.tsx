@@ -4,7 +4,7 @@ export default function Rightbar() {
       <div className="pt-2">
         <input
           type="text"
-          placeholder="Search Chirper"
+          placeholder="Search Echo"
           className="w-full rounded-full px-4 py-2 bg-black/5 dark:bg-white/10 outline-none"
         />
       </div>
@@ -28,4 +28,3 @@ export default function Rightbar() {
     </div>
   );
 }
-

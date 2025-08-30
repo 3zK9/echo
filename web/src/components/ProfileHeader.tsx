@@ -4,6 +4,11 @@ import Image from "next/image";
 import { useState } from "react";
 import { useProfile } from "@/state/profile";
 
+async function saveBioServer(bio: string) {
+  const res = await fetch("/api/profile/bio", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ bio }) });
+  return res.ok;
+}
+
 export default function ProfileHeader({
   username,
   displayName,
@@ -20,9 +25,11 @@ export default function ProfileHeader({
   const [draft, setDraft] = useState<string>(getBio(username));
   const bio = getBio(username);
 
-  const onSave = () => {
-    setBio(username, draft.trim());
+  const onSave = async () => {
+    const trimmed = draft.trim();
+    setBio(username, trimmed);
     setEditing(false);
+    try { await saveBioServer(trimmed); } catch {}
   };
 
   return (
@@ -76,4 +83,3 @@ export default function ProfileHeader({
     </div>
   );
 }
-
