@@ -15,7 +15,12 @@ export default async function middleware(req: NextRequest) {
     pathname.startsWith("/assets");
 
   const token = await getToken({ req, secret: process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET });
-  const isLoggedIn = !!token;
+  const cookieStore = req.cookies;
+  const hasSessionCookie = !!(
+    cookieStore.get("__Secure-next-auth.session-token")?.value ||
+    cookieStore.get("next-auth.session-token")?.value
+  );
+  const isLoggedIn = !!token || hasSessionCookie;
 
   if (!isLoggedIn && !isPublic) {
     const url = new URL("/", nextUrl);
