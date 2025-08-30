@@ -4,10 +4,12 @@ import React, { useEffect, useState } from "react";
 import EchoItem, { type Echo } from "@/components/Echo";
 import { useSession } from "next-auth/react";
 import { useToast } from "@/components/Toast";
+import { useConfirm } from "@/components/Confirm";
 
 export default function EchoList({ items }: { items: Echo[] }) {
   const { data: session } = useSession();
   const { show } = useToast();
+  const confirm = useConfirm();
   const [echoes, setEchoes] = useState<Echo[]>(items);
 
   // Keep local state in sync when parent provides new items (e.g., tab switch)
@@ -53,11 +55,16 @@ export default function EchoList({ items }: { items: Echo[] }) {
   };
 
   const onDelete = async (id: string) => {
+    const okConfirm = await confirm("Delete this echo?", { title: "Delete Echo", confirmText: "Delete" });
+    if (!okConfirm) return;
     try {
       const res = await fetch(`/api/echoes/${id}`, { method: "DELETE" });
-      if (!res.ok) return;
+      if (!res.ok) { show("Failed to delete echo"); return; }
       setEchoes((prev) => prev.filter((t) => t.id !== id));
-    } catch {}
+      show("Echo deleted");
+    } catch {
+      show("Failed to delete echo");
+    }
   };
 
   const me = session?.user?.username || "you";

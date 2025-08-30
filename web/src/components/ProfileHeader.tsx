@@ -3,6 +3,7 @@
 import Image from "next/image";
 import { useEffect, useState } from "react";
 import { useProfile } from "@/state/profile";
+import { useToast } from "@/components/Toast";
 
 async function saveBioServer(bio: string) {
   const res = await fetch("/api/profile/bio", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ bio }) });
@@ -23,18 +24,25 @@ export default function ProfileHeader({
   canEdit: boolean;
 }) {
   const { getBio, setBio, getLink, setLink } = useProfile();
+  const { show } = useToast();
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<string>(getBio(username).slice(0, MAX_BIO));
   const bio = getBio(username);
   const [editingLink, setEditingLink] = useState(false);
   const [linkDraft, setLinkDraft] = useState<string>(getLink(username) || "");
   const link = getLink(username);
+  const [loading, setLoading] = useState<boolean>(true);
 
   const onSave = async () => {
     const trimmed = draft.trim();
     setBio(username, trimmed);
     setEditing(false);
-    try { await saveBioServer(trimmed); } catch {}
+    try {
+      const ok = await saveBioServer(trimmed);
+      if (ok) show("Bio saved"); else show("Failed to save bio");
+    } catch {
+      show("Failed to save bio");
+    }
   };
 
   function normalizeUrl(raw: string): string | null {
@@ -55,11 +63,12 @@ export default function ProfileHeader({
     setLink(username, normalized);
     setEditingLink(false);
     try {
-      await fetch("/api/profile/link", {
+      const res = await fetch("/api/profile/link", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ link: normalized }),
       });
+      if (res.ok) show("Link saved"); else show("Failed to save link");
     } catch {}
   };
 
@@ -85,6 +94,7 @@ export default function ProfileHeader({
         setDraft((data?.bio || "").slice(0, MAX_BIO));
         setLinkDraft(data?.link || "");
       } catch {}
+      finally { if (!cancelled) setLoading(false); }
     };
     load();
     return () => { cancelled = true; };
@@ -128,10 +138,17 @@ export default function ProfileHeader({
               </div>
             ) : (
               <div className="flex items-start gap-3 min-w-0">
-                <p className="text-sm text-white/80 whitespace-pre-wrap break-words break-all flex-1 overflow-hidden">
-                  {bio || (canEdit ? "Add your bio" : "")}
-                </p>
-                {canEdit && (
+                {loading ? (
+                  <div className="flex-1 space-y-2 animate-pulse">
+                    <div className="h-4 w-3/4 bg-white/10 rounded" />
+                    <div className="h-4 w-2/3 bg-white/10 rounded" />
+                  </div>
+                ) : (
+                  <p className="text-sm text-white/80 whitespace-pre-wrap break-words break-all flex-1 overflow-hidden">
+                    {bio || (canEdit ? "Add your bio" : "")}
+                  </p>
+                )}
+                {canEdit && !loading && (
                   <button
                     onClick={() => setEditing(true)}
                     className="shrink-0 px-3 py-1.5 rounded-full border border-white/10 hover:bg-white/10 text-sm font-semibold"
@@ -176,7 +193,9 @@ export default function ProfileHeader({
               ) : (
                 <div className="flex items-start gap-3 min-w-0">
                   <div className="flex-1 min-w-0">
-                    {link ? (
+                    {loading ? (
+                      <div className="h-4 w-1/2 bg-white/10 rounded animate-pulse" />
+                    ) : link ? (
                       <a
                         href={normalizeUrl(link) || undefined}
                         target="_blank"
@@ -189,7 +208,7 @@ export default function ProfileHeader({
                       <div className="text-sm text-white/60">{canEdit ? "Add a link" : ""}</div>
                     )}
                   </div>
-                  {canEdit && (
+                  {canEdit && !loading && (
                     <button
                       onClick={() => setEditingLink(true)}
                       className="shrink-0 px-3 py-1.5 rounded-full border border-white/10 hover:bg-white/10 text-sm font-semibold"

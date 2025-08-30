@@ -2,8 +2,10 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/auth.config";
 import { prisma } from "@/lib/db";
+import { isAllowedMutationRequest } from "@/lib/security";
 
-export async function POST(_: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  if (!isAllowedMutationRequest(req)) return NextResponse.json({ error: "forbidden" }, { status: 403 });
   const session = await getServerSession(authOptions);
   const { id } = await params;
   const meId = (session?.user as any)?.id as string | undefined;

@@ -6,6 +6,7 @@ import Compose from "@/components/Compose";
 import EchoItem, { type Echo } from "@/components/Echo";
 import { useEchoes } from "@/state/echoes";
 import { useToast } from "@/components/Toast";
+import { useConfirm } from "@/components/Confirm";
 
 export default function Feed({
   title = "Home",
@@ -23,6 +24,7 @@ export default function Feed({
   const { echoes, addEcho, toggleLike, addRepost, removeRepost, hasRepostBy, incReposts, decReposts, deleteEcho } = useEchoes();
   const { data: session } = useSession();
   const { show } = useToast();
+  const confirm = useConfirm();
   const [composePrefill, setComposePrefill] = useState<string>("");
 
   const add = (text: string) => {
@@ -114,6 +116,13 @@ export default function Feed({
     }
   };
 
+  const onDelete = async (id: string) => {
+    const okConfirm = await confirm("Delete this echo?", { title: "Delete Echo", confirmText: "Delete" });
+    if (!okConfirm) return;
+    const ok = await deleteEcho(id);
+    show(ok ? "Echo deleted" : "Failed to delete echo");
+  };
+
   return (
     <section className="max-w-[680px] mx-auto min-h-screen">
       <header className="panel px-4 py-3 text-xl font-bold sticky top-4 z-10">
@@ -148,7 +157,7 @@ export default function Feed({
               likesCount={base.likes}
               repostsCount={base.reposts}
               likedByMe={base.liked}
-              onDelete={(id) => deleteEcho(id)}
+              onDelete={onDelete}
             />
           );
         })}

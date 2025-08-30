@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/auth.config";
 import { prisma } from "@/lib/db";
+import { isAllowedMutationRequest } from "@/lib/security";
 
 function sanitizeHandle(name?: string) {
   return (name || "user").toLowerCase().replace(/[^a-z0-9_]+/g, "").slice(0, 12) || "user";
@@ -64,6 +65,7 @@ export async function GET() {
 
 export async function POST(req: Request) {
   try {
+    if (!isAllowedMutationRequest(req)) return NextResponse.json({ error: "forbidden" }, { status: 403 });
     const session = await getServerSession(authOptions);
     if (!(session?.user as any)?.id) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
     const { text, originalId } = await req.json();

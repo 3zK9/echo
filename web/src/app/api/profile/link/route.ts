@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/auth.config";
 import { prisma } from "@/lib/db";
+import { isAllowedMutationRequest } from "@/lib/security";
 
 function normalizeUrl(raw: string): string | null {
   const val = String(raw || "").trim().slice(0, 200);
@@ -18,6 +19,7 @@ function normalizeUrl(raw: string): string | null {
 }
 
 export async function POST(req: Request) {
+  if (!isAllowedMutationRequest(req)) return NextResponse.json({ error: "forbidden" }, { status: 403 });
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   const { link } = await req.json();
@@ -29,4 +31,3 @@ export async function POST(req: Request) {
   });
   return NextResponse.json({ ok: true, link: normalized });
 }
-
