@@ -49,3 +49,9 @@ export const TrashIcon = (props: React.SVGProps<SVGSVGElement>) => (
     <path strokeLinecap="round" strokeLinejoin="round" d="M9.75 4.5h4.5M4.5 7.5h15M18 7.5l-.83 9.13A2.25 2.25 0 0114.94 18.75H9.06a2.25 2.25 0 01-2.23-2.12L6 7.5M10.5 10.5v6M13.5 10.5v6" />
   </svg>
 );
+
+export const PlusIcon = (props: React.SVGProps<SVGSVGElement>) => (
+  <svg viewBox="0 0 24 24" fill="none" strokeWidth="1.5" stroke="currentColor" aria-hidden="true" {...props}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+  </svg>
+);
