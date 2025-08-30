@@ -1,136 +1,89 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import EchoList from "@/components/EchoList";
 import { EchoSkeletonList } from "@/components/Skeletons";
+import useSWRInfinite from "swr/infinite";
+import { keys } from "@/lib/keys";
 import type { Echo } from "@/components/Echo";
 
 export default function ProfileFeed({ username, tab, initialEchoes, initialLikes, initialEchoCursor = null, initialLikesOffset = null }: { username: string; tab: "echoes" | "likes"; initialEchoes?: Echo[]; initialLikes?: Echo[]; initialEchoCursor?: string | null; initialLikesOffset?: number | null }) {
-  const [items, setItems] = useState<Echo[] | null>(initialEchoes && tab === "echoes" ? initialEchoes : initialLikes && tab === "likes" ? initialLikes : null);
-  const [echoesCache, setEchoesCache] = useState<Echo[] | null>(initialEchoes ?? null);
-  const [likesCache, setLikesCache] = useState<Echo[] | null>(initialLikes ?? null);
-  const [echoCursor, setEchoCursor] = useState<string | null>(initialEchoCursor);
-  const [likesOffset, setLikesOffset] = useState<number | null>(initialLikesOffset);
-  const initRef = useRef(false);
-  const abortRef = useRef<AbortController | null>(null);
-  const KEY_E = `profile:${username}:echoes:v1`;
-  const KEY_L = `profile\:${username}:likes:v1`;
+  const LIMIT = 20;
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
 
-  // Fetch both lists when username changes
+  // Echoes SWR (cursor-based)
+  const echoFallback = initialEchoes ? [{ items: initialEchoes, nextCursor: initialEchoCursor ?? null }] : undefined;
+  const { data: edata, size: esize, setSize: esetSize, isValidating: evalid } = useSWRInfinite(
+    (index, prev) => {
+      if (prev && prev.nextCursor === null) return null;
+      const cursor = index === 0 ? null : (edata ? edata[index - 1]?.nextCursor ?? null : null);
+      return keys.profileEchoes(username, cursor, LIMIT);
+    },
+    async ([, uname, cursor, limit]) => {
+      const params = new URLSearchParams();
+      params.set("limit", String(limit));
+      if (cursor) params.set("cursor", String(cursor));
+      const res = await fetch(`/api/users/${encodeURIComponent(String(uname))}/echoes?${params.toString()}`, { cache: "no-store" });
+      if (!res.ok) throw new Error("fetch_echoes_failed");
+      return res.json();
+    },
+    { revalidateFirstPage: false, parallel: true, initialSize: initialEchoes ? 1 : 0, fallbackData: echoFallback }
+  );
+
+  // Likes SWR (offset-based)
+  const likesFallback = initialLikes ? [{ items: initialLikes, nextOffset: initialLikesOffset ?? null }] : undefined;
+  const { data: ldata, size: lsize, setSize: lsetSize, isValidating: lvalid } = useSWRInfinite(
+    (index, prev) => {
+      if (prev && prev.nextOffset === null) return null;
+      const offset = index * LIMIT;
+      return keys.profileLikes(username, offset, LIMIT);
+    },
+    async ([, uname, offset, limit]) => {
+      const params = new URLSearchParams();
+      params.set("limit", String(limit));
+      params.set("offset", String(offset));
+      const res = await fetch(`/api/users/${encodeURIComponent(String(uname))}/likes?${params.toString()}`, { cache: "no-store" });
+      if (!res.ok) throw new Error("fetch_likes_failed");
+      return res.json();
+    },
+    { revalidateFirstPage: false, parallel: true, initialSize: initialLikes ? 1 : 0, fallbackData: likesFallback }
+  );
+
+  const echoItems = edata ? edata.flatMap((p: any) => p.items as Echo[]) : [];
+  const likeItems = ldata ? ldata.flatMap((p: any) => p.items as Echo[]) : [];
+  const activeItems = tab === "echoes" ? echoItems : likeItems;
+  const hasMore = tab === "echoes" ? (edata ? edata[edata.length - 1]?.nextCursor != null : false) : (ldata ? ldata[ldata.length - 1]?.nextOffset != null : false);
+  const loading = tab === "echoes" ? (evalid && echoItems.length === 0) : (lvalid && likeItems.length === 0);
+
+  // Prefetch the other tab for instant switching
   useEffect(() => {
-    let cancelled = false;
-    // Try cached sessionStorage first
-    try {
-      const rawE = typeof window !== "undefined" ? sessionStorage.getItem(KEY_E) : null;
-      const rawL = typeof window !== "undefined" ? sessionStorage.getItem(KEY_L) : null;
-      const e = rawE ? (JSON.parse(rawE) as Echo[]) : null;
-      const l = rawL ? (JSON.parse(rawL) as Echo[]) : null;
-      if (!echoesCache && e) setEchoesCache(e);
-      if (!likesCache && l) setLikesCache(l);
-      if (!items) {
-        if ((tab === "echoes" && (e || initialEchoes)) || (tab === "likes" && (l || initialLikes))) {
-          setItems(tab === "echoes" ? (e || initialEchoes || null) : (l || initialLikes || null));
-        } else setItems(null);
-      }
-    } catch { setItems(null); }
-
-    // If we already have initial props, keep them and just refresh in background
-
-    abortRef.current?.abort();
-    abortRef.current = new AbortController();
-    const signal = abortRef.current.signal;
-
-    const run = async () => {
-      if (tab === "likes") {
-        const likes = await fetch(`/api/users/${encodeURIComponent(username)}/likes?limit=20&offset=0`, { cache: "no-store", signal })
-          .then((res) => (res.ok ? res.json() : { items: [], nextOffset: null }))
-          .catch(() => ({ items: [] as Echo[], nextOffset: null }));
-        if (cancelled) return;
-        setLikesCache((likes.items || []) as Echo[]);
-        setLikesOffset((likes.nextOffset as number | null) ?? null);
-        try { if (typeof window !== "undefined") sessionStorage.setItem(KEY_L, JSON.stringify(likes.items || [])); } catch {}
-        if (!initialLikes) setItems((likes.items || []) as Echo[]);
-      } else {
-        const echoes = await fetch(`/api/users/${encodeURIComponent(username)}/echoes?limit=20`, { cache: "no-store", signal })
-          .then((res) => (res.ok ? res.json() : { items: [], nextCursor: null }))
-          .catch(() => ({ items: [] as Echo[], nextCursor: null }));
-        if (cancelled) return;
-        setEchoesCache((echoes.items || []) as Echo[]);
-        setEchoCursor((echoes.nextCursor as string | null) ?? null);
-        try { if (typeof window !== "undefined") sessionStorage.setItem(KEY_E, JSON.stringify(echoes.items || [])); } catch {}
-        if (!initialEchoes) setItems((echoes.items || []) as Echo[]);
-      }
-    };
-    run();
-
-    initRef.current = true;
-    return () => { cancelled = true; };
+    const id = requestAnimationFrame(() => {
+      if (tab === "echoes") lsetSize(1); else esetSize(1);
+    });
+    return () => cancelAnimationFrame(id);
   }, [username]);
 
-  // On tab switch, show cached list immediately if available, then refresh in background
+  // Infinite scroll sentinel
   useEffect(() => {
-    if (!initRef.current) return;
-    if (tab === "likes") {
-      if (likesCache) setItems(likesCache);
-      else setItems(null);
-      // background refresh
-      fetch(`/api/users/${encodeURIComponent(username)}/likes?limit=20&offset=0`, { cache: "no-store" })
-        .then((res) => (res.ok ? res.json() : { items: [], nextOffset: null }))
-        .then((data) => {
-          setLikesCache((data.items || []) as Echo[]);
-          setLikesOffset((data.nextOffset as number | null) ?? null);
-          try { if (typeof window !== "undefined") sessionStorage.setItem(KEY_L, JSON.stringify(data.items || [])); } catch {}
-          if (tab === "likes") setItems((data.items || []) as Echo[]);
-        })
-        .catch(() => {});
-    } else {
-      if (echoesCache) setItems(echoesCache);
-      else setItems(null);
-      fetch(`/api/users/${encodeURIComponent(username)}/echoes?limit=20`, { cache: "no-store" })
-        .then((res) => (res.ok ? res.json() : { items: [], nextCursor: null }))
-        .then((data) => {
-          setEchoesCache((data.items || []) as Echo[]);
-          setEchoCursor((data.nextCursor as string | null) ?? null);
-          try { if (typeof window !== "undefined") sessionStorage.setItem(KEY_E, JSON.stringify(data.items || [])); } catch {}
-          if (tab === "echoes") setItems((data.items || []) as Echo[]);
-        })
-        .catch(() => {});
-    }
-  }, [tab]);
+    const el = sentinelRef.current;
+    if (!el) return;
+    const obs = new IntersectionObserver((entries) => {
+      entries.forEach((e) => {
+        if (e.isIntersecting && hasMore) {
+          if (tab === "echoes") esetSize(esize + 1); else lsetSize(lsize + 1);
+        }
+      });
+    }, { rootMargin: "200px" });
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [hasMore, esize, lsize, tab]);
 
-  const loadMore = async () => {
-    if (tab === "echoes") {
-      if (!echoCursor) return;
-      try {
-        const res = await fetch(`/api/users/${encodeURIComponent(username)}/echoes?limit=20&cursor=${encodeURIComponent(echoCursor)}`, { cache: "no-store" });
-        if (!res.ok) return;
-        const data = await res.json();
-        const next = (data.items || []) as Echo[];
-        setItems((prev) => ([...(prev || []), ...next]));
-        setEchoCursor((data.nextCursor as string | null) ?? null);
-      } catch {}
-    } else {
-      if (likesOffset == null) return;
-      try {
-        const res = await fetch(`/api/users/${encodeURIComponent(username)}/likes?limit=20&offset=${likesOffset}`, { cache: "no-store" });
-        if (!res.ok) return;
-        const data = await res.json();
-        const next = (data.items || []) as Echo[];
-        setItems((prev) => ([...(prev || []), ...next]));
-        setLikesOffset((data.nextOffset as number | null) ?? null);
-      } catch {}
-    }
-  };
-
-  if (items === null) return <EchoSkeletonList count={4} />;
+  if (loading && activeItems.length === 0) return <EchoSkeletonList count={4} />;
   return (
     <>
-      <EchoList items={items} />
-      {(tab === "echoes" ? echoCursor : likesOffset != null) && (
-        <div className="panel mt-4 p-3 text-center">
-          <button onClick={loadMore} className="btn-primary px-6 py-2">Load more</button>
-        </div>
-      )}
+      <EchoList items={activeItems} />
+      <div ref={sentinelRef} />
     </>
   );
 }
+
