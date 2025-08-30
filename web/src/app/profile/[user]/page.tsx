@@ -80,7 +80,7 @@ export default async function UserProfilePage({
           </div>
 
           <header className="px-4 py-3 text-xl font-bold sticky top-[109px] z-10 bg-white/70 dark:bg-black/50 backdrop-blur border-b border-black/10 dark:border-white/10">{tab === "echoes" ? "Echoes" : "Likes"}</header>
-          <ProfileFeed username={username} tab={tab} />
+          <ProfileFeed key={`${username}:${tab}`} username={username} tab={tab} />
         </section>
       </main>
     </div>

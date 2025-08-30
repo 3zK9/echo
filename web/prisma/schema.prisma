@@ -82,6 +82,7 @@ model Echo {@@map("Tweet")
 
   @@index([authorId, createdAt])
   @@index([createdAt])
+  @@index([originalId])
 }
 
 model EchoLike {@@map("Like")
@@ -93,6 +94,7 @@ model EchoLike {@@map("Like")
 
   @@id([userId, echoId])
   @@index([echoId])
+  @@index([userId, createdAt])
 }
 
 model Profile {

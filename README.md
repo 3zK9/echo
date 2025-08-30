@@ -1,6 +1,6 @@
 # Echo — Minimal Twitter-like UI
 
-A Next.js App Router project that mimics a lightweight Twitter experience: compose “echoes”, like, retweet, mention users, and browse profiles — all styled with Tailwind and authenticated via GitHub OAuth using NextAuth.
+A Next.js App Router project that mimics a lightweight Twitter experience: compose “echoes”, like, repost, mention users, and browse profiles — all styled with Tailwind and authenticated via GitHub OAuth using NextAuth.
 
 This repo contains the web app under `web/` and a minimal root setup for docs and tooling.
 
@@ -9,10 +9,10 @@ This repo contains the web app under `web/` and a minimal root setup for docs an
 - **Splash sign-on:** Unauthenticated visitors to `/` see a splash page with a single “Sign in with GitHub” button. Protected routes redirect to the splash and return you to your original page after login.
 - **GitHub Auth:** NextAuth with GitHub OAuth. Username is derived from your GitHub login.
 - **First-time setup:** After login, a cookie `echo_setup=done` is set via `/setup` before allowing full access.
-- **Home feed:** Compose new echoes, like/unlike, retweet/unretweet, and share via the Web Share API or clipboard fallback.
-- **Mentions → profiles:** `@username` in text and the tweet header handle link to that user’s profile.
+- **Home feed:** Compose new echoes, like/unlike, repost/unrepost, and share via the Web Share API or clipboard fallback.
+- **Mentions → profiles:** `@username` in text and the echo header handle link to that user’s profile.
 - **Profiles:** Dynamic route at `/profile/[user]` with tabs for Echoes and Likes. Includes a compact header with avatar and an editable bio (stored locally).
-- **Local state:** Tweets and bios persist in `localStorage` during development. There is no backend database yet.
+- **Local state:** Echoes and bios persist in `localStorage` during development. There is no backend database yet.
 - **Toasts:** Simple in-app notifications.
 
 ## Tech Stack
@@ -29,8 +29,8 @@ This repo contains the web app under `web/` and a minimal root setup for docs an
   - `src/app/profile/[user]/page.tsx` — Dynamic profile route with Echoes/Likes tabs
   - `src/app/login/page.tsx` — Redirects to `/` (splash sign-on)
   - `middleware.ts` — Auth gating and setup redirect
-  - `src/components/` — UI components (Feed, Tweet, Sidebar, Splash, etc.)
-  - `src/state/` — Client state for tweets and profiles (localStorage)
+  - `src/components/` — UI components (Feed, Echo, Sidebar, Splash, etc.)
+  - `src/state/` — Client state for echoes and profiles (localStorage)
 
 ## Getting Started
 
@@ -43,14 +43,34 @@ This repo contains the web app under `web/` and a minimal root setup for docs an
 - Homepage URL: `http://localhost:3000`
 - Authorization callback URL: `http://localhost:3000/api/auth/callback/github`
 
-3) Configure environment
+3) Create a Supabase project (Postgres)
+
+- In Supabase, create a new project and get the `Connection string` (use the pooled connection for serverless if available).
+- Copy the URL as your `DATABASE_URL`.
+
+4) Configure environment
 
 - Copy `web/.env.example` to `web/.env.local` and fill in:
   - `AUTH_SECRET` — any random secret (use `openssl rand -base64 32`)
   - `AUTH_GITHUB_ID` — your GitHub OAuth Client ID
   - `AUTH_GITHUB_SECRET` — your GitHub OAuth Client Secret
+  - `DATABASE_URL` — Supabase Postgres connection string
 
-4) Run the app
+Important: Prisma reads DATABASE_URL from `web/.env` (not `.env.local`) when running CLI commands like `prisma migrate`. Create `web/.env` with the same `DATABASE_URL` value or export it inline when running Prisma.
+
+5) (First time) Initialize Prisma
+
+- From `web/`:
+  - `npm run prisma:generate`
+  - Ensure `web/.env` contains `DATABASE_URL=...` (or run the next command with `DATABASE_URL=...` inline)
+  - `npm run prisma:migrate -- -n init`
+
+If you accidentally named it `DATABASE_URI`:
+- Either rename it to `DATABASE_URL`, or add both keys in your env files:
+  - `DATABASE_URI=...`
+  - `DATABASE_URL=...` (Prisma requires this exact name)
+
+6) Run the app
 
 - `npm run dev` (in `web/`), then open `http://localhost:3000`
 
@@ -74,9 +94,9 @@ Never commit real secrets. Use the provided `.gitignore` rules and keep `.env.lo
 
 ## Next Steps (Suggested)
 
-- **Persist data:** Add a backend (e.g., Next.js Route Handlers or a small server) and a DB to store tweets, likes, retweets, bios, and users.
+- **Wire to DB (in progress):** We’ve added Prisma + schema for Supabase. Next steps are to: add Prisma Adapter to NextAuth, implement API routes for echoes/likes/bio, and swap the UI from local state to server-backed data with optimistic updates.
 - **Mentions/hashtags:** Linkify `#hashtags` and add a basic search/explore page.
-- **Retweet model:** Track retweeter relationships and aggregate stats server-side.
+- **Repost model:** Track reposter relationships and aggregate stats server-side.
 - **Media uploads:** Support image/video attachments in echoes.
 - **Notifications:** Basic notifications for mentions and likes.
 - **Validation & limits:** Character limits, input validation, and better counters for compose/bio.
@@ -90,4 +110,4 @@ Never commit real secrets. Use the provided `.gitignore` rules and keep `.env.lo
 
 ---
 
-Questions or want me to wire up a minimal backend to persist tweets and bios? Happy to help.
+Questions or want me to wire up a minimal backend to persist echoes and bios? Happy to help.

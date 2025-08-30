@@ -16,33 +16,37 @@ function relTime(d: Date) {
 }
 
 export async function GET(_: Request, { params }: { params: Promise<{ user: string }> }) {
-  const { user } = await params;
-  let u = await prisma.user.findFirst({ where: { username: user } });
-  if (!u) {
-    const session = await getServerSession(authOptions);
-    if (session?.user?.id) {
-      const me = await prisma.user.findUnique({ where: { id: String((session.user as any).id) } });
-      const fallback = sanitizeHandle(session.user?.name as string | undefined);
-      if (me && (user.toLowerCase() === "you" || user.toLowerCase() === (fallback || "").toLowerCase())) {
-        u = me;
+  try {
+    const { user } = await params;
+    let u = await prisma.user.findFirst({ where: { username: user } });
+    if (!u) {
+      const session = await getServerSession(authOptions);
+      if (session?.user?.id) {
+        const me = await prisma.user.findUnique({ where: { id: String((session.user as any).id) } });
+        const fallback = sanitizeHandle(session.user?.name as string | undefined);
+        if (me && (user.toLowerCase() === "you" || user.toLowerCase() === (fallback || "").toLowerCase())) {
+          u = me;
+        }
       }
     }
+    if (!u) return NextResponse.json([], { status: 200 });
+    const echoes = await prisma.echo.findMany({ where: { authorId: u.id }, orderBy: { createdAt: "desc" }, include: { author: { select: { name: true, username: true, image: true } }, _count: { select: { likes: true, reposts: true } } } });
+    const rows = echoes.map((t) => ({
+      id: t.id,
+      name: t.author?.name || t.author?.username || "User",
+      handle: t.author?.username || sanitizeHandle(t.author?.name || undefined),
+      time: relTime(t.createdAt as Date),
+      text: t.text,
+      likes: t._count?.likes ?? 0,
+      reposts: t._count?.reposts ?? 0,
+      liked: false,
+      reposted: false,
+      avatarUrl: t.author?.image || undefined,
+      originalId: t.originalId || undefined,
+      isRepost: !!t.originalId,
+    }));
+    return NextResponse.json(rows, { headers: { "Cache-Control": "private, max-age=15" } });
+  } catch (e) {
+    return NextResponse.json([], { headers: { "Cache-Control": "private, max-age=5", "x-db-error": "unreachable" } });
   }
-  if (!u) return NextResponse.json([], { status: 200 });
-  const echoes = await prisma.echo.findMany({ where: { authorId: u.id }, orderBy: { createdAt: "desc" }, include: { author: true } });
-  const rows = await Promise.all(echoes.map(async (t) => ({
-    id: t.id,
-    name: t.author?.name || t.author?.username || "User",
-    handle: t.author?.username || sanitizeHandle(t.author?.name || undefined),
-    time: relTime(t.createdAt as Date),
-    text: t.text,
-    likes: await prisma.echoLike.count({ where: { echoId: t.id } }),
-    reposts: await prisma.echo.count({ where: { originalId: t.id } }),
-    liked: false,
-    reposted: false,
-    avatarUrl: t.author?.image || undefined,
-    originalId: t.originalId || undefined,
-    isRepost: !!t.originalId,
-  })));
-  return NextResponse.json(rows);
 }

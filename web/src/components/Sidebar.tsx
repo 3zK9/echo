@@ -39,6 +39,8 @@ export default function Sidebar() {
                 width={36}
                 height={36}
                 className="rounded-full"
+                sizes="36px"
+                priority
               />
               <div className="truncate">
                 <div className="font-semibold truncate">{user.name || "User"}</div>

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import EchoItem, { type Echo } from "@/components/Echo";
 import { useSession } from "next-auth/react";
 import { useToast } from "@/components/Toast";
@@ -9,6 +9,11 @@ export default function EchoList({ items }: { items: Echo[] }) {
   const { data: session } = useSession();
   const { show } = useToast();
   const [echoes, setEchoes] = useState<Echo[]>(items);
+
+  // Keep local state in sync when parent provides new items (e.g., tab switch)
+  useEffect(() => {
+    setEchoes(items);
+  }, [items]);
 
   const toggleLike = async (id: string) => {
     try {

@@ -39,7 +39,7 @@ export default function Compose({ onPost, initialText = "" }: { onPost?: (text: 
           ref={inputRef}
           value={text}
           onChange={(e) => setText(e.target.value)}
-          placeholder="What is happening?!"
+          placeholder="Echo Something?!"
           rows={3}
           className="w-full resize-none bg-transparent outline-none placeholder:text-black/50 dark:placeholder:text-white/50"
         />

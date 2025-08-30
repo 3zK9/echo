@@ -15,11 +15,7 @@ function relTime(d: Date) {
   return `${Math.floor(diff / 86400)}d`;
 }
 
-async function mapEcho(t: any, meId?: string) {
-  const likesCount = await prisma.echoLike.count({ where: { echoId: t.id } });
-  const repostCount = await prisma.echo.count({ where: { originalId: t.id } });
-  const likedByMe = meId ? !!(await prisma.echoLike.findUnique({ where: { userId_echoId: { userId: meId, echoId: t.id } } })) : false;
-  const repostedByMe = meId ? !!(await prisma.echo.findFirst({ where: { originalId: t.id, authorId: meId } })) : false;
+function mapEchoRow(t: any, likedSet: Set<string>, repostedSet: Set<string>) {
   const handle = t.author?.username || sanitizeHandle(t.author?.name || undefined);
   return {
     id: t.id,
@@ -27,10 +23,10 @@ async function mapEcho(t: any, meId?: string) {
     handle,
     time: relTime(t.createdAt as Date),
     text: t.text,
-    likes: likesCount,
-    reposts: repostCount,
-    liked: likedByMe,
-    reposted: repostedByMe,
+    likes: t._count?.likes ?? 0,
+    reposts: t._count?.reposts ?? 0,
+    liked: likedSet.has(t.id),
+    reposted: repostedSet.has(t.id),
     avatarUrl: t.author?.image || undefined,
     originalId: t.originalId || undefined,
     isRepost: !!t.originalId,
@@ -38,19 +34,43 @@ async function mapEcho(t: any, meId?: string) {
 }
 
 export async function GET() {
-  const session = await getServerSession(authOptions);
-  const meId = (session?.user as any)?.id as string | undefined;
-  const echoes = await prisma.echo.findMany({ orderBy: { createdAt: "desc" }, take: 100, include: { author: true } });
-  const rows = await Promise.all(echoes.map((t) => mapEcho(t, meId)));
-  return NextResponse.json(rows);
+  try {
+    const session = await getServerSession(authOptions);
+    const meId = (session?.user as any)?.id as string | undefined;
+    const echoes = await prisma.echo.findMany({
+      orderBy: { createdAt: "desc" },
+      take: 50,
+      include: {
+        author: { select: { name: true, username: true, image: true } },
+        _count: { select: { likes: true, reposts: true } },
+      },
+    });
+    const ids = echoes.map((e) => e.id);
+    const likedSet = new Set<string>();
+    const repostedSet = new Set<string>();
+    if (meId && ids.length) {
+      const likes = await prisma.echoLike.findMany({ where: { userId: meId, echoId: { in: ids } }, select: { echoId: true } });
+      likes.forEach((l) => likedSet.add(l.echoId));
+      const reposts = await prisma.echo.findMany({ where: { authorId: meId, originalId: { in: ids } }, select: { originalId: true } });
+      reposts.forEach((r) => r.originalId && repostedSet.add(r.originalId));
+    }
+    const rows = echoes.map((t) => mapEchoRow(t, likedSet, repostedSet));
+    return NextResponse.json(rows, { headers: { "Cache-Control": "private, max-age=10" } });
+  } catch (e) {
+    return NextResponse.json([], { headers: { "Cache-Control": "private, max-age=5", "x-db-error": "unreachable" } });
+  }
 }
 
 export async function POST(req: Request) {
-  const session = await getServerSession(authOptions);
-  if (!(session?.user as any)?.id) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  const { text, originalId } = await req.json();
-  const created = await prisma.echo.create({ data: { text: String(text || "").slice(0, 280), authorId: (session.user as any).id, originalId: originalId || null } });
-  const withAuthor = await prisma.echo.findUnique({ where: { id: created.id }, include: { author: true } });
-  const row = await mapEcho(withAuthor, (session.user as any).id);
-  return NextResponse.json(row, { status: 201 });
+  try {
+    const session = await getServerSession(authOptions);
+    if (!(session?.user as any)?.id) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+    const { text, originalId } = await req.json();
+    const created = await prisma.echo.create({ data: { text: String(text || "").slice(0, 280), authorId: (session.user as any).id, originalId: originalId || null } });
+    const withAuthor = await prisma.echo.findUnique({ where: { id: created.id }, include: { author: { select: { name: true, username: true, image: true } } } });
+    const row = mapEchoRow({ ...withAuthor, _count: { likes: 0, reposts: 0 } }, new Set(), new Set());
+    return NextResponse.json(row, { status: 201 });
+  } catch (e) {
+    return NextResponse.json({ error: "db_unreachable" }, { status: 503 });
+  }
 }

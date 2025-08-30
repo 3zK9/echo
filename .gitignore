@@ -5,6 +5,7 @@
 *.swp
 *.swo
 *.orig
+*.env
 
 # Node/TypeScript
 node_modules/
@@ -31,3 +32,9 @@ web/.env
 web/.env.*
 !web/.env.example
 
+# Project/editor/OS extras
+.vscode/
+.idea/
+Thumbs.db
+coverage/
+.vercel/
