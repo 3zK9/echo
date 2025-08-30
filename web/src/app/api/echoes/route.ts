@@ -85,10 +85,11 @@ export async function POST(req: Request) {
     if (!isAllowedMutationRequest(req)) return NextResponse.json({ error: "forbidden" }, { status: 403 });
     const session = await getServerSession(authOptions);
     if (!(session?.user as any)?.id) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+    const userId = (session!.user as any).id as string;
     const { text, originalId } = await req.json();
-    const created = await prisma.echo.create({ data: { text: String(text || "").slice(0, 280), authorId: (session.user as any).id, originalId: originalId || null } });
+    const created = await prisma.echo.create({ data: { text: String(text || "").slice(0, 280), authorId: userId, originalId: originalId || null } });
     const withAuthor = await prisma.echo.findUnique({ where: { id: created.id }, include: { author: { select: { name: true, username: true, image: true } } } });
-    const row = mapEchoRow({ ...withAuthor, _count: { likes: 0, reposts: 0 } }, new Set(), new Set(), (session.user as any).id);
+    const row = mapEchoRow({ ...withAuthor, _count: { likes: 0, reposts: 0 } }, new Set(), new Set(), userId);
     return NextResponse.json(row, { status: 201 });
   } catch (e) {
     return NextResponse.json({ error: "db_unreachable" }, { status: 503 });
