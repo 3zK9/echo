@@ -1,12 +1,17 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useRef, useState } from "react";
 import { useSession, signOut } from "next-auth/react";
 import { HomeIcon, UserIcon, PlusIcon, LogoutIcon } from "@/components/icons";
+import { useConfirm } from "@/components/Confirm";
 
 export default function BottomNav() {
   const { data: session } = useSession();
   const username = (session?.user as any)?.username as string | undefined;
+  const confirm = useConfirm();
+  const [open, setOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement | null>(null);
 
   // Hide on unauthenticated/splash
   if (!session) return null;
@@ -17,6 +22,15 @@ export default function BottomNav() {
       // Some pages listen for #compose to focus the textarea
     }
   };
+
+  useEffect(() => {
+    const onDoc = (e: MouseEvent) => {
+      if (!menuRef.current) return;
+      if (!menuRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, []);
 
   return (
     <nav
@@ -37,23 +51,43 @@ export default function BottomNav() {
         >
           <PlusIcon className="w-6 h-6" />
         </button>
-        <div className="flex items-center gap-2">
-          <Link
-            href={username ? `/profile/${encodeURIComponent(username)}` : "/profile"}
-            className="p-2 rounded-full hover:bg-white/10"
-            aria-label="Profile"
-          >
-            <UserIcon className="w-7 h-7" />
-          </Link>
+        <div className="relative" ref={menuRef}>
           <button
             type="button"
-            onClick={() => signOut({ callbackUrl: "/" })}
+            onClick={() => setOpen((v) => !v)}
             className="p-2 rounded-full hover:bg-white/10"
-            aria-label="Sign out"
-            title="Sign out"
+            aria-haspopup="menu"
+            aria-expanded={open}
+            aria-label="Profile menu"
+            title="Profile menu"
           >
-            <LogoutIcon className="w-7 h-7" />
+            <UserIcon className="w-7 h-7" />
           </button>
+          {open && (
+            <div role="menu" aria-label="Profile menu" className="absolute bottom-12 right-0 w-44 panel p-2">
+              <Link
+                href={username ? `/profile/${encodeURIComponent(username)}` : "/profile"}
+                className="flex items-center gap-2 px-3 py-2 rounded hover:bg-white/10"
+                role="menuitem"
+                onClick={() => setOpen(false)}
+              >
+                <UserIcon className="w-5 h-5" />
+                <span>Profile</span>
+              </Link>
+              <button
+                type="button"
+                className="flex w-full items-center gap-2 px-3 py-2 rounded hover:bg-white/10 text-red-400"
+                role="menuitem"
+                onClick={async () => {
+                  const ok = await confirm("Sign out?", { title: "Confirm", confirmText: "Sign out", cancelText: "Cancel" });
+                  if (ok) signOut({ callbackUrl: "/" });
+                }}
+              >
+                <LogoutIcon className="w-5 h-5" />
+                <span>Sign out</span>
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </nav>
