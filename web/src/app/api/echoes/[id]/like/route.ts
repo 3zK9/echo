@@ -4,10 +4,10 @@ import { authOptions } from "@/auth.config";
 import { prisma } from "@/lib/db";
 import { isAllowedMutationRequest } from "@/lib/security";
 
-export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function POST(req: Request, { params }: { params: { id: string } }) {
   if (!isAllowedMutationRequest(req)) return NextResponse.json({ error: "forbidden" }, { status: 403 });
   const session = await getServerSession(authOptions);
-  const { id } = await params;
+  const { id } = params;
   const meId = (session?.user as any)?.id as string | undefined;
   if (!meId) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 

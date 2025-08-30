@@ -15,9 +15,9 @@ function relTime(d: Date) {
   return `${Math.floor(diff / 86400)}d`;
 }
 
-export async function GET(req: Request, { params }: { params: Promise<{ user: string }> }) {
+export async function GET(req: Request, { params }: { params: { user: string } }) {
   try {
-    const { user } = await params;
+    const { user } = params;
     let u = await prisma.user.findFirst({ where: { username: user } });
     const session = await getServerSession(authOptions);
     const meId = (session?.user as any)?.id as string | undefined;
