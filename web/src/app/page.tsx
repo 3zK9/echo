@@ -1,5 +1,5 @@
 import Sidebar from "@/components/Sidebar";
-import Feed from "@/components/Feed";
+import HomeFeed from "@/components/HomeFeed";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/auth.config";
 import Splash from "@/components/Splash";
@@ -13,7 +13,7 @@ export default async function Home() {
         <Sidebar />
       </aside>
       <main>
-        <Feed />
+        <HomeFeed />
       </main>
     </div>
   );

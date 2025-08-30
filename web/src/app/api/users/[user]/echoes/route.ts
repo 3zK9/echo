@@ -52,22 +52,31 @@ export async function GET(req: Request, { params }: { params: Promise<{ user: st
         },
       },
     });
+    const baseIds = echoes.map((t) => t.originalId || t.id);
+    const likedSet = new Set<string>();
+    const repostedSet = new Set<string>();
+    if (meId && baseIds.length) {
+      const likes = await prisma.echoLike.findMany({ where: { userId: meId, echoId: { in: baseIds } }, select: { echoId: true } });
+      likes.forEach((l) => likedSet.add(l.echoId));
+      const reposts = await prisma.echo.findMany({ where: { authorId: meId, originalId: { in: baseIds } }, select: { originalId: true } });
+      reposts.forEach((r) => r.originalId && repostedSet.add(r.originalId));
+    }
     const hasMore = echoes.length > limit;
     const page = hasMore ? echoes.slice(0, limit) : echoes;
     const rows = page
-      .filter((t) => !t.originalId || !!t.original)
+      .filter((t) => !t.originalId || !!t.original) // hide orphan reposts
       .map((t) => {
         const display = t.original ?? t;
         return {
-          id: t.originalId || t.id,
+          id: t.id, // keep unique id so original and repost both show
           name: display.author?.name || display.author?.username || "User",
           handle: display.author?.username || sanitizeHandle(display.author?.name || undefined),
           time: relTime((display.createdAt as Date) || (t.createdAt as Date)),
           text: display.text,
           likes: display._count?.likes ?? 0,
           reposts: display._count?.reposts ?? 0,
-          liked: false,
-          reposted: false,
+          liked: likedSet.has(t.originalId || t.id),
+          reposted: repostedSet.has(t.originalId || t.id),
           avatarUrl: display.author?.image || undefined,
           originalId: t.originalId || undefined,
           isRepost: !!t.originalId,

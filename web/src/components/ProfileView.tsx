@@ -10,12 +10,16 @@ export default function ProfileView({
   avatar,
   canEdit,
   initialTab = "echoes",
+  initialBio,
+  initialLink,
 }: {
   username: string;
   displayName: string;
   avatar: string;
   canEdit: boolean;
   initialTab?: "echoes" | "likes";
+  initialBio?: string;
+  initialLink?: string | null;
 }) {
   const [tab, setTab] = useState<"echoes" | "likes">(initialTab);
 
@@ -37,7 +41,7 @@ export default function ProfileView({
 
   return (
     <>
-      <ProfileHeader username={username} displayName={displayName} avatar={avatar} canEdit={canEdit} />
+      <ProfileHeader username={username} displayName={displayName} avatar={avatar} canEdit={canEdit} initialBio={initialBio} initialLink={initialLink} />
 
       <div className="sticky top-[53px] z-10 bg-white/70 dark:bg-black/50 backdrop-blur border-b border-black/10 dark:border-white/10">
         <div className="flex">
@@ -65,4 +69,3 @@ export default function ProfileView({
     </>
   );
 }
-

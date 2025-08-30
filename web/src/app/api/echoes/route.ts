@@ -37,13 +37,17 @@ function mapEchoRow(t: any, likedSet: Set<string>, repostedSet: Set<string>, meI
   };
 }
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
     const session = await getServerSession(authOptions);
     const meId = (session?.user as any)?.id as string | undefined;
+    const url = new URL(req.url);
+    const limit = Math.max(1, Math.min(50, parseInt(url.searchParams.get("limit") || "20", 10)));
+    const cursor = url.searchParams.get("cursor") || undefined;
     const echoes = await prisma.echo.findMany({
-      orderBy: { createdAt: "desc" },
-      take: 50,
+      orderBy: { id: "desc" },
+      take: limit + 1,
+      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
       include: {
         author: { select: { name: true, username: true, image: true } },
         _count: { select: { likes: true, reposts: true } },
@@ -55,7 +59,9 @@ export async function GET() {
         },
       },
     });
-    const baseIds = echoes.map((e) => e.originalId || e.id);
+    const hasMore = echoes.length > limit;
+    const page = hasMore ? echoes.slice(0, limit) : echoes;
+    const baseIds = page.map((e) => e.originalId || e.id);
     const likedSet = new Set<string>();
     const repostedSet = new Set<string>();
     if (meId && baseIds.length) {
@@ -64,20 +70,13 @@ export async function GET() {
       const reposts = await prisma.echo.findMany({ where: { authorId: meId, originalId: { in: baseIds } }, select: { originalId: true } });
       reposts.forEach((r) => r.originalId && repostedSet.add(r.originalId));
     }
-    const rawRows = echoes
-      .filter((t) => !t.originalId || !!t.original) // drop orphan reposts where original is deleted
+    const items = page
+      .filter((t) => !t.originalId || !!t.original)
       .map((t) => mapEchoRow(t, likedSet, repostedSet, meId));
-    // Deduplicate by base id, keep the first (most recent) occurrence
-    const seen = new Set<string>();
-    const rows: any[] = [];
-    for (const r of rawRows) {
-      if (seen.has(r.id)) continue;
-      seen.add(r.id);
-      rows.push(r);
-    }
-    return NextResponse.json(rows, { headers: { "Cache-Control": "private, max-age=10" } });
+    const nextCursor = hasMore ? echoes[limit].id : null;
+    return NextResponse.json({ items, nextCursor }, { headers: { "Cache-Control": "private, max-age=10" } });
   } catch (e) {
-    return NextResponse.json([], { headers: { "Cache-Control": "private, max-age=5", "x-db-error": "unreachable" } });
+    return NextResponse.json({ items: [], nextCursor: null }, { headers: { "Cache-Control": "private, max-age=5", "x-db-error": "unreachable" } });
   }
 }
 

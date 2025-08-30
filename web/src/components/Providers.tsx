@@ -1,7 +1,6 @@
 "use client";
 
 import { SessionProvider } from "next-auth/react";
-import { EchoesProvider } from "@/state/echoes";
 import { ToastProvider } from "@/components/Toast";
 import { ProfileProvider } from "@/state/profile";
 import { ConfirmProvider } from "@/components/Confirm";
@@ -11,6 +10,7 @@ import { useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { mutate } from "swr";
 import { keys } from "@/lib/keys";
+import { useProfile } from "@/state/profile";
 
 function BackgroundPrefetch() {
   const { data: session } = useSession();
@@ -31,21 +31,34 @@ function BackgroundPrefetch() {
   return null;
 }
 
+function PrefetchProfileMeta() {
+  const { data: session } = useSession();
+  const { setBio, setLink } = useProfile();
+  useEffect(() => {
+    const username = (session?.user as any)?.username as string | undefined;
+    if (!username) return;
+    fetch(`/api/profile/${encodeURIComponent(username)}`, { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => { if (data) { setBio(username, data.bio || ""); setLink(username, data.link ?? null); } })
+      .catch(() => {});
+  }, [session?.user]);
+  return null;
+}
+
 export default function Providers({ children }: { children: React.ReactNode }) {
   return (
     <SessionProvider>
-      <EchoesProvider>
-        <ProfileProvider>
-          <ToastProvider>
-            <SWRConfig value={swrConfig}>
-              <ConfirmProvider>
-                <BackgroundPrefetch />
-                {children}
-              </ConfirmProvider>
-            </SWRConfig>
-          </ToastProvider>
-        </ProfileProvider>
-      </EchoesProvider>
+      <ProfileProvider>
+        <ToastProvider>
+          <SWRConfig value={swrConfig}>
+            <ConfirmProvider>
+              <BackgroundPrefetch />
+              <PrefetchProfileMeta />
+              {children}
+            </ConfirmProvider>
+          </SWRConfig>
+        </ToastProvider>
+      </ProfileProvider>
     </SessionProvider>
   );
 }

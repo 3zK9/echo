@@ -44,7 +44,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ user: st
       include: { echo: { include: { author: { select: { name: true, username: true, image: true } }, _count: { select: { likes: true, reposts: true } }, original: { include: { author: { select: { name: true, username: true, image: true } }, _count: { select: { likes: true, reposts: true } } } } } } },
     });
     const rows = likes
-      .filter((l) => !l.echo.originalId || !!l.echo.original)
+      .filter((l) => !l.echo.originalId)
       .map((l) => {
         const e = l.echo;
         const display = e.original ?? e;

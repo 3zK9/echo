@@ -15,8 +15,9 @@ export default function ProfileFeed({ username, tab, initialEchoes, initialLikes
   const echoFallback = initialEchoes ? [{ items: initialEchoes, nextCursor: initialEchoCursor ?? null }] : undefined;
   const { data: edata, size: esize, setSize: esetSize, isValidating: evalid } = useSWRInfinite(
     (index, prev) => {
+      if (index === 0) return keys.profileEchoes(username, null, LIMIT);
       if (prev && prev.nextCursor === null) return null;
-      const cursor = index === 0 ? null : (edata ? edata[index - 1]?.nextCursor ?? null : null);
+      const cursor = prev?.nextCursor ?? null;
       return keys.profileEchoes(username, cursor, LIMIT);
     },
     async ([, uname, cursor, limit]) => {
@@ -27,7 +28,7 @@ export default function ProfileFeed({ username, tab, initialEchoes, initialLikes
       if (!res.ok) throw new Error("fetch_echoes_failed");
       return res.json();
     },
-    { revalidateFirstPage: false, parallel: true, initialSize: initialEchoes ? 1 : 0, fallbackData: echoFallback }
+    { revalidateFirstPage: false, parallel: true, initialSize: 1, fallbackData: echoFallback }
   );
 
   // Likes SWR (offset-based)
@@ -46,12 +47,22 @@ export default function ProfileFeed({ username, tab, initialEchoes, initialLikes
       if (!res.ok) throw new Error("fetch_likes_failed");
       return res.json();
     },
-    { revalidateFirstPage: false, parallel: true, initialSize: initialLikes ? 1 : 0, fallbackData: likesFallback }
+    { revalidateFirstPage: false, parallel: true, initialSize: 1, fallbackData: likesFallback }
   );
 
   const echoItems = edata ? edata.flatMap((p: any) => p.items as Echo[]) : [];
   const likeItems = ldata ? ldata.flatMap((p: any) => p.items as Echo[]) : [];
-  const activeItems = tab === "echoes" ? echoItems : likeItems;
+  const activeItemsRaw = tab === "echoes" ? echoItems : likeItems;
+  const activeItems = (() => {
+    const seen = new Set<string>();
+    const out: Echo[] = [] as any;
+    for (const it of activeItemsRaw) {
+      if (seen.has(it.id)) continue;
+      seen.add(it.id);
+      out.push(it);
+    }
+    return out;
+  })();
   const hasMore = tab === "echoes" ? (edata ? edata[edata.length - 1]?.nextCursor != null : false) : (ldata ? ldata[ldata.length - 1]?.nextOffset != null : false);
   const loading = tab === "echoes" ? (evalid && echoItems.length === 0) : (lvalid && likeItems.length === 0);
 
@@ -81,9 +92,8 @@ export default function ProfileFeed({ username, tab, initialEchoes, initialLikes
   if (loading && activeItems.length === 0) return <EchoSkeletonList count={4} />;
   return (
     <>
-      <EchoList items={activeItems} />
+      <EchoList items={activeItems} username={username} />
       <div ref={sentinelRef} />
     </>
   );
 }
-

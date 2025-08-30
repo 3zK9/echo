@@ -4,6 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useSession, signOut } from "next-auth/react";
 import { HomeIcon, UserIcon } from "@/components/icons";
+import { prefetchProfile, prefetchProfileMetaToLocal } from "@/lib/prefetch";
 
 const NavItem = ({ label, href, icon }: { label: string; href: string; icon?: React.ReactNode }) => (
   <Link
@@ -27,7 +28,17 @@ export default function Sidebar() {
         <div className="text-2xl font-extrabold mb-4 bg-gradient-to-r from-violet-400 to-sky-400 bg-clip-text text-transparent">Echo</div>
         <nav className="flex flex-col gap-1">
           <NavItem label="Home" href="/" icon={<HomeIcon className="w-6 h-6" />} />
-          <NavItem label="Profile" href={username ? `/profile/${encodeURIComponent(username)}` : "/profile"} icon={<UserIcon className="w-6 h-6" />} />
+          <Link
+            href={username ? `/profile/${encodeURIComponent(username)}` : "/profile"}
+            className="flex items-center gap-3 px-4 py-3 rounded-full hover:bg-black/5 dark:hover:bg-white/10 transition"
+            prefetch
+            onMouseEnter={() => { if (username) { prefetchProfile(username); prefetchProfileMetaToLocal(username); } }}
+          >
+            <span className="text-xl" aria-hidden>
+              <UserIcon className="w-6 h-6" />
+            </span>
+            <span className="text-lg font-semibold">Profile</span>
+          </Link>
         </nav>
         <Link href="/#compose" className="mt-4 block text-center w-full btn-primary">Echo</Link>
         {user && (

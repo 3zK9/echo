@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/auth.config";
 import ProfileView from "@/components/ProfileView";
 import { redirect } from "next/navigation";
-// no DB fetching here; client will fetch via SWR
+import { prisma } from "@/lib/db";
 
 function sanitizeHandle(name?: string) {
   return (name || "user").toLowerCase().replace(/[^a-z0-9_]+/g, "").slice(0, 12) || "user";
@@ -49,7 +49,17 @@ export default async function UserProfilePage({
     return `/profile/${encodeURIComponent(username)}?${sp.toString()}`;
   };
 
-  // Avoid heavy SSR fetching on tab switches; client will fetch via SWR
+  // Fetch lightweight profile meta (bio/link) on server to avoid client delay
+  let initialBio: string | undefined = undefined;
+  let initialLink: string | null | undefined = undefined;
+  try {
+    const u = await prisma.user.findFirst({ where: { username: username } });
+    if (u) {
+      const prof = await prisma.profile.findUnique({ where: { userId: u.id } });
+      initialBio = prof?.bio || "";
+      initialLink = (prof?.link as string | null) ?? null;
+    }
+  } catch {}
 
   return (
     <div className="mx-auto max-w-5xl grid grid-cols-1 md:grid-cols-[275px_minmax(0,1fr)] min-h-screen">
@@ -58,7 +68,7 @@ export default async function UserProfilePage({
       </aside>
       <main>
         <section className="max-w-[600px] border-x border-black/10 dark:border-white/10 min-h-screen">
-          <ProfileView username={username} displayName={displayName} avatar={avatar} canEdit={isMe} initialTab={tab} />
+          <ProfileView username={username} displayName={displayName} avatar={avatar} canEdit={isMe} initialTab={tab} initialBio={initialBio} initialLink={initialLink} />
         </section>
       </main>
     </div>

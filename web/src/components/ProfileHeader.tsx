@@ -35,7 +35,8 @@ export default function ProfileHeader({
   const [editingLink, setEditingLink] = useState(false);
   const [linkDraft, setLinkDraft] = useState<string>((initialLink ?? getLink(username)) || "");
   const link = (initialLink ?? getLink(username)) || null;
-  const [loading, setLoading] = useState<boolean>(!(initialBio !== undefined || initialLink !== undefined));
+  const hasLocal = !!(getBio(username) || getLink(username));
+  const [loading, setLoading] = useState<boolean>(!(initialBio !== undefined || initialLink !== undefined || hasLocal));
 
   const onSave = async () => {
     const trimmed = draft.trim();
@@ -151,17 +152,10 @@ export default function ProfileHeader({
               </div>
             ) : (
               <div className="flex items-start gap-3 min-w-0">
-                {loading ? (
-                  <div className="flex-1 space-y-2 animate-pulse">
-                    <div className="h-4 w-3/4 bg-white/10 rounded" />
-                    <div className="h-4 w-2/3 bg-white/10 rounded" />
-                  </div>
-                ) : (
-                  <p className="text-sm text-white/80 whitespace-pre-wrap break-words break-all flex-1 overflow-hidden">
-                    {bio || (canEdit ? "Add your bio" : "")}
-                  </p>
-                )}
-                {canEdit && !loading && (
+                <p className="text-sm text-white/80 whitespace-pre-wrap break-words break-all flex-1 overflow-hidden">
+                  {bio || (canEdit ? "Add your bio" : "")}
+                </p>
+                {canEdit && (
                   <button
                     onClick={() => setEditing(true)}
                     className="shrink-0 px-3 py-1.5 rounded-full border border-white/10 hover:bg-white/10 text-sm font-semibold"
@@ -206,9 +200,7 @@ export default function ProfileHeader({
               ) : (
                 <div className="flex items-start gap-3 min-w-0">
                   <div className="flex-1 min-w-0">
-                    {loading ? (
-                      <div className="h-4 w-1/2 bg-white/10 rounded animate-pulse" />
-                    ) : link ? (
+                    {link ? (
                       <a
                         href={normalizeUrl(link) || undefined}
                         target="_blank"
@@ -221,7 +213,7 @@ export default function ProfileHeader({
                       <div className="text-sm text-white/60">{canEdit ? "Add a link" : ""}</div>
                     )}
                   </div>
-                  {canEdit && !loading && (
+                  {canEdit && (
                     <button
                       onClick={() => setEditingLink(true)}
                       className="shrink-0 px-3 py-1.5 rounded-full border border-white/10 hover:bg-white/10 text-sm font-semibold"
