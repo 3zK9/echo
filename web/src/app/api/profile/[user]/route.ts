@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/auth.config";
@@ -7,8 +7,8 @@ function sanitizeHandle(name?: string) {
   return (name || "user").toLowerCase().replace(/[^a-z0-9_]+/g, "").slice(0, 12) || "user";
 }
 
-export async function GET(_: Request, { params }: { params: { user: string } }) {
-  const { user } = params;
+export async function GET(_: NextRequest, { params }: { params: Promise<{ user: string }> }) {
+  const { user } = await params;
   let u = await prisma.user.findFirst({ where: { username: user } });
   if (!u) {
     // Resolve aliases for self: /profile/you or sanitized name fallback
