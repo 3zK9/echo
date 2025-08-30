@@ -20,7 +20,7 @@ export default function Feed({
   mineUsername?: string;
   emptyMessage?: string;
 }) {
-  const { echoes, addEcho, toggleLike, addRepost, removeRepost, hasRepostBy, incReposts, decReposts } = useEchoes();
+  const { echoes, addEcho, toggleLike, addRepost, removeRepost, hasRepostBy, incReposts, decReposts, deleteEcho } = useEchoes();
   const { data: session } = useSession();
   const { show } = useToast();
   const [composePrefill, setComposePrefill] = useState<string>("");
@@ -148,6 +148,7 @@ export default function Feed({
               likesCount={base.likes}
               repostsCount={base.reposts}
               likedByMe={base.liked}
+              onDelete={(id) => deleteEcho(id)}
             />
           );
         })}

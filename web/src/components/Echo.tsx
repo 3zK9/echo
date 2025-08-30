@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
-import { ReplyIcon, RetweetIcon, HeartIcon, UploadIcon } from "@/components/icons";
+import { ReplyIcon, RetweetIcon, HeartIcon, UploadIcon, TrashIcon } from "@/components/icons";
 
 export type Echo = {
   id: string;
@@ -18,6 +18,7 @@ export type Echo = {
   avatarUrl?: string;
   originalId?: string;
   isRepost?: boolean;
+  canDelete?: boolean;
 };
 
 export default function EchoItem({
@@ -30,6 +31,7 @@ export default function EchoItem({
   repostsCount,
   likedByMe,
   onReply,
+  onDelete,
 }: {
   t: Echo;
   onLike?: (id: string) => void;
@@ -40,9 +42,10 @@ export default function EchoItem({
   repostsCount?: number;
   likedByMe?: boolean;
   onReply?: (id: string) => void;
+  onDelete?: (id: string) => void;
 }) {
   const { data: session } = useSession();
-  const isMine = session?.user?.username && t.handle === session.user.username;
+  const isMine = t.canDelete || (session?.user?.username && t.handle === session.user.username);
 
   const renderText = (input: string) => {
     const parts: React.ReactNode[] = [];
@@ -123,6 +126,12 @@ export default function EchoItem({
             <UploadIcon className="w-5 h-5" />
             <span className="sr-only">Share</span>
           </button>
+          {isMine && (
+            <button type="button" onClick={() => onDelete?.(t.id)} className="inline-flex items-center gap-2 hover:text-red-500">
+              <TrashIcon className="w-5 h-5" />
+              <span className="sr-only">Delete</span>
+            </button>
+          )}
         </div>
       </div>
     </article>

@@ -13,6 +13,7 @@ type EchoesContextType = {
   hasRepostBy: (originalId: string, handle: string) => boolean;
   incReposts: (originalId: string) => void;
   decReposts: (originalId: string) => void;
+  deleteEcho: (id: string) => void;
 };
 
 const EchoesContext = createContext<EchoesContextType | undefined>(undefined);
@@ -75,8 +76,16 @@ export function EchoesProvider({ children }: { children: React.ReactNode }) {
 
   const decReposts: EchoesContextType["decReposts"] = async () => {};
 
+  const deleteEcho = async (id: string) => {
+    try {
+      const res = await fetch(`/api/echoes/${id}`, { method: "DELETE" });
+      if (!res.ok) return;
+      setEchoes((prev) => prev.filter((t) => t.id !== id));
+    } catch {}
+  };
+
   const value = useMemo(
-    () => ({ echoes, addEcho, toggleLike, toggleRepost, addRepost, removeRepost, hasRepostBy, incReposts, decReposts }),
+    () => ({ echoes, addEcho, toggleLike, toggleRepost, addRepost, removeRepost, hasRepostBy, incReposts, decReposts, deleteEcho }),
     [echoes]
   );
   return <EchoesContext.Provider value={value}>{children}</EchoesContext.Provider>;

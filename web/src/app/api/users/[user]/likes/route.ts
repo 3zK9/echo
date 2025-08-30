@@ -19,8 +19,9 @@ export async function GET(_: Request, { params }: { params: Promise<{ user: stri
   try {
     const { user } = await params;
     let u = await prisma.user.findFirst({ where: { username: user } });
+    const session = await getServerSession(authOptions);
+    const meId = (session?.user as any)?.id as string | undefined;
     if (!u) {
-      const session = await getServerSession(authOptions);
       if (session?.user?.id) {
         const me = await prisma.user.findUnique({ where: { id: String((session.user as any).id) } });
         const fallback = sanitizeHandle(session.user?.name as string | undefined);
@@ -48,6 +49,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ user: stri
       avatarUrl: l.echo.author?.image || undefined,
       originalId: l.echo.originalId || undefined,
       isRepost: !!l.echo.originalId,
+      canDelete: !!meId && l.echo.authorId === meId,
     }));
     return NextResponse.json(rows, { headers: { "Cache-Control": "private, max-age=15" } });
   } catch (e) {

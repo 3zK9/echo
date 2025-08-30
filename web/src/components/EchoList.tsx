@@ -52,6 +52,14 @@ export default function EchoList({ items }: { items: Echo[] }) {
     }
   };
 
+  const onDelete = async (id: string) => {
+    try {
+      const res = await fetch(`/api/echoes/${id}`, { method: "DELETE" });
+      if (!res.ok) return;
+      setEchoes((prev) => prev.filter((t) => t.id !== id));
+    } catch {}
+  };
+
   const me = session?.user?.username || "you";
 
   return (
@@ -68,6 +76,7 @@ export default function EchoList({ items }: { items: Echo[] }) {
           likesCount={t.likes}
           repostsCount={t.reposts}
           likedByMe={t.liked}
+          onDelete={() => onDelete(t.id)}
         />
       ))}
       {echoes.length === 0 && (

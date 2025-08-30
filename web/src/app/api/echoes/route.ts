@@ -15,7 +15,7 @@ function relTime(d: Date) {
   return `${Math.floor(diff / 86400)}d`;
 }
 
-function mapEchoRow(t: any, likedSet: Set<string>, repostedSet: Set<string>) {
+function mapEchoRow(t: any, likedSet: Set<string>, repostedSet: Set<string>, meId?: string) {
   const handle = t.author?.username || sanitizeHandle(t.author?.name || undefined);
   return {
     id: t.id,
@@ -30,6 +30,7 @@ function mapEchoRow(t: any, likedSet: Set<string>, repostedSet: Set<string>) {
     avatarUrl: t.author?.image || undefined,
     originalId: t.originalId || undefined,
     isRepost: !!t.originalId,
+    canDelete: !!meId && t.authorId === meId,
   };
 }
 
@@ -54,7 +55,7 @@ export async function GET() {
       const reposts = await prisma.echo.findMany({ where: { authorId: meId, originalId: { in: ids } }, select: { originalId: true } });
       reposts.forEach((r) => r.originalId && repostedSet.add(r.originalId));
     }
-    const rows = echoes.map((t) => mapEchoRow(t, likedSet, repostedSet));
+    const rows = echoes.map((t) => mapEchoRow(t, likedSet, repostedSet, meId));
     return NextResponse.json(rows, { headers: { "Cache-Control": "private, max-age=10" } });
   } catch (e) {
     return NextResponse.json([], { headers: { "Cache-Control": "private, max-age=5", "x-db-error": "unreachable" } });
@@ -68,7 +69,7 @@ export async function POST(req: Request) {
     const { text, originalId } = await req.json();
     const created = await prisma.echo.create({ data: { text: String(text || "").slice(0, 280), authorId: (session.user as any).id, originalId: originalId || null } });
     const withAuthor = await prisma.echo.findUnique({ where: { id: created.id }, include: { author: { select: { name: true, username: true, image: true } } } });
-    const row = mapEchoRow({ ...withAuthor, _count: { likes: 0, reposts: 0 } }, new Set(), new Set());
+    const row = mapEchoRow({ ...withAuthor, _count: { likes: 0, reposts: 0 } }, new Set(), new Set(), (session.user as any).id);
     return NextResponse.json(row, { status: 201 });
   } catch (e) {
     return NextResponse.json({ error: "db_unreachable" }, { status: 503 });

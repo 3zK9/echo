@@ -101,5 +101,6 @@ model Profile {
   userId    String  @id
   user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
   bio       String? @db.Text
+  link      String? @db.Text
   updatedAt DateTime @updatedAt
 }
