@@ -13,7 +13,7 @@ export default async function middleware(req: NextRequest) {
     pathname.startsWith("/favicon.ico") ||
     pathname.startsWith("/assets");
 
-  const token = await getToken({ req, secret: process.env.AUTH_SECRET });
+  const token = await getToken({ req, secret: process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET });
   const isLoggedIn = !!token;
 
   if (!isLoggedIn && !isPublic) {
