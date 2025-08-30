@@ -5,7 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { ReplyIcon, RetweetIcon, HeartIcon, UploadIcon, TrashIcon } from "@/components/icons";
-import { prefetchProfile } from "@/lib/prefetch";
+import { prefetchProfile, prefetchProfileMetaToLocal } from "@/lib/prefetch";
 
 export type Echo = {
   id: string;
@@ -103,7 +103,7 @@ function EchoItem({
         <header className="flex items-center gap-2 text-sm">
           <span className="font-semibold truncate">{t.name}</span>
           <span className="text-black/50 dark:text-white/50 truncate">
-            <Link prefetch href={`/profile/${encodeURIComponent(t.handle)}`} onMouseEnter={() => prefetchProfile(t.handle)} className="hover:underline">@{t.handle}</Link> · {t.time}
+            <Link prefetch href={`/profile/${encodeURIComponent(t.handle)}`} onMouseEnter={() => { prefetchProfile(t.handle); prefetchProfileMetaToLocal(t.handle); }} className="hover:underline">@{t.handle}</Link> · {t.time}
           </span>
         </header>
         <p className="mt-1 whitespace-pre-wrap break-words">{renderText(t.text)}</p>
