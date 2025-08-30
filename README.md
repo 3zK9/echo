@@ -111,3 +111,31 @@ Never commit real secrets. Use the provided `.gitignore` rules and keep `.env.lo
 ---
 
 Questions or want me to wire up a minimal backend to persist echoes and bios? Happy to help.
+
+## Deploy to Vercel
+
+- Project root: set to `web/` in Vercel (Project Settings → General → Root Directory).
+- Build Command: already configured via `web/vercel.json` as `npm run prisma:deploy && npm run build`.
+- Install Command: `npm ci` (default; also in `vercel.json`).
+
+Environment variables (Production):
+- `NEXTAUTH_URL=https://your-domain.tld`
+- `AUTH_SECRET` — long random string
+- `AUTH_GITHUB_ID`, `AUTH_GITHUB_SECRET` — from your GitHub OAuth app
+- `AUTH_TRUST_HOST=true`
+- `DATABASE_URL` — Supabase pooled (PgBouncer) URL, e.g.
+  - `postgresql://USER:PASSWORD@aws-1-REGION.pooler.supabase.com:6543/postgres?pgbouncer=true&connection_limit=1`
+- `DIRECT_URL` — Supabase direct URL (5432) for migrations, e.g.
+  - `postgresql://USER:PASSWORD@aws-1-REGION.supabase.com:5432/postgres`
+
+Why pooled + direct:
+- The app at runtime uses the pooled `DATABASE_URL` to avoid connection exhaustion.
+- Prisma’s migrations use the `DIRECT_URL` for a direct connection with full features.
+
+GitHub OAuth (prod):
+- Homepage URL: `https://your-domain.tld`
+- Authorization callback URL: `https://your-domain.tld/api/auth/callback/github`
+
+Migrations in CI/Prod:
+- Migrations are committed under `web/prisma/migrations/`.
+- Vercel runs `npm run prisma:deploy` before build (from `vercel.json`).
