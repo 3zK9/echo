@@ -13,8 +13,7 @@ export default function BottomNav() {
   const [open, setOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement | null>(null);
 
-  // Hide on unauthenticated/splash
-  if (!session) return null;
+  const showNav = !!session;
 
   const onCompose = () => {
     if (typeof window !== "undefined") {
@@ -32,7 +31,7 @@ export default function BottomNav() {
     return () => document.removeEventListener("mousedown", onDoc);
   }, []);
 
-  return (
+  return showNav ? (
     <nav
       className="md:hidden fixed inset-x-0 bottom-0 z-50 bg-black/60 backdrop-blur border-t border-white/10"
       role="navigation"
@@ -91,5 +90,5 @@ export default function BottomNav() {
         </div>
       </div>
     </nav>
-  );
+  ) : null;
 }
