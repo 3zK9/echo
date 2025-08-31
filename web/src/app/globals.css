@@ -23,4 +23,19 @@ body {
   .btn-primary {
     @apply rounded-full text-white font-semibold px-5 py-3 bg-gradient-to-r from-violet-500 to-sky-500 hover:from-violet-400 hover:to-sky-400 transition;
   }
+  .code-block {
+    @apply bg-black/60 border border-white/10 rounded-lg p-3 overflow-x-auto text-sm font-mono leading-6;
+  }
+  .code-inline {
+    @apply bg-black/50 rounded px-1.5 py-0.5 font-mono text-[0.9em];
+  }
+  /* Tiny token theme for our lightweight highlighter */
+  .tok-cmt { color: #9CA3AF; } /* gray-400 */
+  .tok-kw  { color: #93C5FD; } /* sky-300 */
+  .tok-lit { color: #FDE68A; } /* amber-300 */
+  .tok-str { color: #86EFAC; } /* green-300 */
+  .tok-num { color: #FCA5A5; } /* red-300 */
+  .tok-fn  { color: #C4B5FD; } /* violet-300 */
+  .tok-punc{ color: #E5E7EB; } /* gray-200 */
+  .tok-key { color: #FCD34D; } /* amber-400 */
 }

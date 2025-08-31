@@ -7,6 +7,157 @@ import { useSession } from "next-auth/react";
 import { ReplyIcon, RetweetIcon, HeartIcon, UploadIcon, TrashIcon } from "@/components/icons";
 import { prefetchProfile, prefetchProfileMetaToLocal } from "@/lib/prefetch";
 
+function escapeHtml(s: string) {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function highlight(code: string, lang?: string): React.ReactNode {
+  const l = (lang || "").toLowerCase();
+  const src = escapeHtml(code);
+  // Very small regex-based highlighter for common languages
+  const patterns: Record<string, { re: RegExp; cls: string }[]> = {
+    js: [
+      { re: /\/(?:\*[^]*?\*\/|\/\/.*)/g, cls: "tok-cmt" },
+      { re: /\b(?:import|export|from|as|if|else|for|while|do|switch|case|break|continue|try|catch|finally|throw|return|new|class|extends|super|this|function|const|let|var|typeof|instanceof|in|of|void|yield|async|await|delete)\b/g, cls: "tok-kw" },
+      { re: /\b(?:true|false|null|undefined|NaN|Infinity)\b/g, cls: "tok-lit" },
+      { re: /([A-Za-z_$][A-Za-z0-9_$]*)\s*(?=\()/g, cls: "tok-fn" },
+      { re: /0x[0-9a-fA-F]+|\b\d+(?:\.\d+)?\b/g, cls: "tok-num" },
+      { re: /(['"])(?:\\.|(?!\1).)*\1/g, cls: "tok-str" },
+      { re: /`(?:\\.|[^`])*`/g, cls: "tok-str" },
+    ],
+    ts: [],
+    tsx: [],
+    jsx: [],
+    json: [
+      { re: /\/(?:\*[^]*?\*\/|\/\/.*)/g, cls: "tok-cmt" },
+      { re: /([{}\[\]:,])/g, cls: "tok-punc" },
+      { re: /"(?:\\.|[^"])*"(?=\s*:)/g, cls: "tok-key" },
+      { re: /"(?:\\.|[^"])*"/g, cls: "tok-str" },
+      { re: /-?\b\d+(?:\.\d+)?\b/g, cls: "tok-num" },
+      { re: /\b(?:true|false|null)\b/g, cls: "tok-lit" },
+    ],
+    py: [
+      { re: /#.*$/gm, cls: "tok-cmt" },
+      { re: /\b(?:def|class|import|from|as|if|elif|else|for|while|try|except|finally|raise|return|with|lambda|yield|pass|break|continue|and|or|not|in|is)\b/g, cls: "tok-kw" },
+      { re: /(['"])\1\1[^]*?\1\1\1/g, cls: "tok-str" },
+      { re: /(['"])(?:\\.|(?!\1).)*\1/g, cls: "tok-str" },
+      { re: /\b(?:True|False|None)\b/g, cls: "tok-lit" },
+      { re: /\b\d+(?:\.\d+)?\b/g, cls: "tok-num" },
+    ],
+    sql: [
+      { re: /--.*$/gm, cls: "tok-cmt" },
+      { re: /\/\*[^]*?\*\//g, cls: "tok-cmt" },
+      { re: /\b(?:select|insert|update|delete|from|where|and|or|not|into|values|set|create|table|primary|key|foreign|references|join|left|right|inner|outer|on|group|by|order|limit|offset|having|as)\b/gi, cls: "tok-kw" },
+      { re: /(['"])(?:\\.|(?!\1).)*\1/g, cls: "tok-str" },
+      { re: /\b\d+(?:\.\d+)?\b/g, cls: "tok-num" },
+    ],
+  };
+
+  const langs = ["ts", "tsx", "jsx"].includes(l) ? "js" : (l === "javascript" ? "js" : (l === "python" ? "py" : (l === "" ? "js" : l)));
+  const rules = patterns[langs] || patterns.js;
+
+  // Apply regexes sequentially by splitting and wrapping matches
+  let nodes: React.ReactNode[] = [src];
+  for (const { re, cls } of rules) {
+    const next: React.ReactNode[] = [];
+    for (const fragment of nodes) {
+      if (typeof fragment !== "string") { next.push(fragment); continue; }
+      let last = 0;
+      fragment.replace(re, (m, ...args) => {
+        const idx = (args[args.length - 2] as number) ?? 0; // match index
+        if (idx > last) next.push(fragment.slice(last, idx));
+        next.push(<span className={cls} key={`${cls}-${idx}-${m.length}`}>{m}</span>);
+        last = idx + m.length;
+        return m;
+      });
+      if (last < fragment.length) next.push(fragment.slice(last));
+    }
+    nodes = next;
+  }
+  return nodes;
+}
+
+function renderMarkdownWithCode(input: string): React.ReactNode[] {
+  const out: React.ReactNode[] = [];
+  const fence = /```([a-zA-Z0-9#+._-]*)\n([\s\S]*?)```/g;
+  let last = 0;
+  let m: RegExpExecArray | null;
+  while ((m = fence.exec(input))) {
+    const [full, lang, body] = m;
+    if (m.index > last) {
+      const text = input.slice(last, m.index);
+      out.push(renderInlineText(text));
+    }
+    out.push(
+      <pre className="code-block" key={`code-${m.index}`}>
+        <code>{highlight(body.replace(/\n$/, ""), lang)}</code>
+      </pre>
+    );
+    last = m.index + full.length;
+  }
+  if (last < input.length) out.push(renderInlineText(input.slice(last)));
+  return out;
+}
+
+function renderInlineText(input: string) {
+  // Split by lines and apply mention links and inline code
+  const lines = input.split(/\n/);
+  return (
+    <>
+      {lines.map((line, i) => (
+        <p key={`p-${i}`} className="whitespace-pre-wrap break-words">
+          {renderMentionsAndInlineCode(line)}
+        </p>
+      ))}
+    </>
+  );
+}
+
+function renderMentionsAndInlineCode(input: string) {
+  const parts: React.ReactNode[] = [];
+  const codeRe = /`([^`]+)`/g;
+  let last = 0;
+  let match: RegExpExecArray | null;
+  while ((match = codeRe.exec(input))) {
+    const [full, code] = match;
+    if (match.index > last) parts.push(renderMentions(input.slice(last, match.index)));
+    parts.push(<code key={`ic-${match.index}`} className="code-inline">{code}</code>);
+    last = match.index + full.length;
+  }
+  if (last < input.length) parts.push(renderMentions(input.slice(last)));
+  return parts;
+}
+
+function renderMentions(input: string) {
+  const parts: React.ReactNode[] = [];
+  const regex = /@([a-z0-9_]{1,15})/gi;
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+  while ((match = regex.exec(input))) {
+    const [full, handle] = match;
+    if (match.index > lastIndex) parts.push(input.slice(lastIndex, match.index));
+    parts.push(
+      <Link
+        key={`${handle}-${match.index}`}
+        prefetch
+        href={`/profile/${encodeURIComponent(handle)}`}
+        onMouseEnter={() => { prefetchProfile(handle); prefetchProfileMetaToLocal(handle); }}
+        className="text-sky-500 hover:underline"
+      >
+        {full}
+      </Link>
+    );
+    lastIndex = match.index + full.length;
+  }
+  if (lastIndex < input.length) parts.push(input.slice(lastIndex));
+  return parts;
+}
+
 export type Echo = {
   id: string;
   name: string;
@@ -49,32 +200,7 @@ function EchoItem({
   const { data: session } = useSession();
   const isMine = t.canDelete || (session?.user?.username && t.handle === session.user.username);
 
-  const renderText = (input: string) => {
-    const parts: React.ReactNode[] = [];
-    const regex = /@([a-z0-9_]{1,15})/gi;
-    let lastIndex = 0;
-    let match: RegExpExecArray | null;
-    while ((match = regex.exec(input))) {
-      const [full, handle] = match;
-      if (match.index > lastIndex) {
-        parts.push(input.slice(lastIndex, match.index));
-      }
-      parts.push(
-        <Link
-          key={`${handle}-${match.index}`}
-          prefetch
-          href={`/profile/${encodeURIComponent(handle)}`}
-          onMouseEnter={() => { prefetchProfile(handle); prefetchProfileMetaToLocal(handle); }}
-          className="text-sky-500 hover:underline"
-        >
-          {full}
-        </Link>
-      );
-      lastIndex = match.index + full.length;
-    }
-    if (lastIndex < input.length) parts.push(input.slice(lastIndex));
-    return parts;
-  };
+  const renderText = (input: string) => renderMarkdownWithCode(input);
   return (
     <article id={`t-${t.id}`} className="flex gap-3 px-4 py-4 border-b border-white/10 hover:bg-white/5 transition">
       <div className="shrink-0">
@@ -113,7 +239,7 @@ function EchoItem({
             </Link> · {t.time}
           </span>
         </header>
-        <p className="mt-1 whitespace-pre-wrap break-words">{renderText(t.text)}</p>
+        <div className="mt-1 space-y-2">{renderText(t.text)}</div>
         <div className="mt-3 flex items-center gap-6 text-black/60 dark:text-white/60 text-sm">
           <button type="button" onClick={() => onReply?.(t.id)} className="inline-flex items-center gap-2 hover:text-sky-500">
             <ReplyIcon className="w-5 h-5 rotate-180" />
