@@ -116,7 +116,6 @@ function renderMarkdownWithCode(input: string): React.ReactNode[] {
     const cls = `language-${(lang || "").toLowerCase() || "javascript"}`;
     out.push(
       <pre className={`code-block ${cls}`} key={`code-${m!.index}`}>
-        {/* eslint-disable-next-line react/no-danger */}
         <code className={cls} dangerouslySetInnerHTML={{ __html: codeHtml }} />
       </pre>
     );
