@@ -85,7 +85,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ user
       });
     const nextCursor = hasMore ? echoes[limit].id : null;
     return NextResponse.json({ items: rows, nextCursor }, { headers: { "Cache-Control": "private, max-age=15" } });
-  } catch (e) {
+  } catch (_e) {
     return NextResponse.json({ items: [], nextCursor: null }, { headers: { "Cache-Control": "private, max-age=5", "x-db-error": "unreachable" } });
   }
 }

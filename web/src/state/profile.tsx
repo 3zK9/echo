@@ -25,7 +25,6 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
         if (parsed && typeof parsed === "object") setProfiles(parsed);
       }
     } catch {}
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {

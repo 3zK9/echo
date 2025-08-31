@@ -48,12 +48,7 @@ export default async function UserProfilePage({
   const avatar = isMe
     ? (session?.user?.image || `https://api.dicebear.com/9.x/identicon/png?seed=${encodeURIComponent((meUsername || username).toLowerCase())}`)
     : (dbUser?.image || `https://api.dicebear.com/9.x/identicon/png?seed=${encodeURIComponent(username.toLowerCase())}`);
-
-  const makeHref = (t: "echoes" | "likes") => {
-    const sp = new URLSearchParams();
-    sp.set("tab", t);
-    return `/profile/${encodeURIComponent(username)}?${sp.toString()}`;
-  };
+  // (removed unused makeHref)
 
   // Fetch lightweight profile meta (bio/link) on server to avoid client delay
   let initialBio: string | undefined = undefined;

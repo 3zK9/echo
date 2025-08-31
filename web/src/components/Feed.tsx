@@ -111,7 +111,7 @@ export default function Feed({
         }
         show("Link copied to clipboard");
       }
-    } catch (e) {
+    } catch {
       // ignore user cancel
     }
   };

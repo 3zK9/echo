@@ -36,7 +36,6 @@ export default function ProfileHeader({
   const [linkDraft, setLinkDraft] = useState<string>((initialLink ?? getLink(username)) || "");
   const link = (initialLink ?? getLink(username)) || null;
   const hasLocal = !!(getBio(username) || getLink(username));
-  const [loading, setLoading] = useState<boolean>(!(initialBio !== undefined || initialLink !== undefined || hasLocal));
 
   const onSave = async () => {
     const trimmed = draft.trim();
@@ -91,7 +90,6 @@ export default function ProfileHeader({
       // Seed local cache and skip network fetch
       if (typeof initialBio === "string") setBio(username, initialBio);
       if (typeof initialLink === "string" || initialLink === null) setLink(username, initialLink ?? null);
-      setLoading(false);
       setDraft((initialBio || "").slice(0, MAX_BIO));
       setLinkDraft(initialLink || "");
       return;
@@ -108,7 +106,6 @@ export default function ProfileHeader({
         setDraft((data?.bio || "").slice(0, MAX_BIO));
         setLinkDraft(data?.link || "");
       } catch {}
-      finally { if (!cancelled) setLoading(false); }
     };
     load();
     return () => { cancelled = true; };

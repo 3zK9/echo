@@ -183,7 +183,7 @@ export function EchoesProvider({ children }: { children: React.ReactNode }) {
 
   const value = useMemo(
     () => ({ echoes, addEcho, toggleLike, toggleRepost, addRepost, removeRepost, hasRepostBy, incReposts, decReposts, deleteEcho }),
-    [echoes]
+    [echoes, removeRepost, hasRepostBy]
   );
   return <EchoesContext.Provider value={value}>{children}</EchoesContext.Provider>;
 }

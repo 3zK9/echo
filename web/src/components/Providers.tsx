@@ -41,7 +41,7 @@ function PrefetchProfileMeta() {
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => { if (data) { setBio(username, data.bio || ""); setLink(username, data.link ?? null); } })
       .catch(() => {});
-  }, [session?.user]);
+  }, [session?.user, setBio, setLink]);
   return null;
 }
 

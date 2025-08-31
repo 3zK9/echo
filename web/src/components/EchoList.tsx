@@ -119,7 +119,7 @@ export default function EchoList({ items, username }: { items: Echo[]; username?
     } catch {}
   };
 
-  const onReply = (id: string, handle: string) => {
+  const onReply = (id: string) => {
     if (typeof window !== "undefined") {
       window.location.href = `/#compose`;
     }
@@ -138,7 +138,6 @@ export default function EchoList({ items, username }: { items: Echo[]; username?
     }
   };
 
-  const me = session?.user?.username || "you";
 
   // Deduplicate by id to avoid any accidental duplicates from upstream
   const uniqueEchoes = (() => {
@@ -164,7 +163,7 @@ export default function EchoList({ items, username }: { items: Echo[]; username?
             onLike={() => toggleLike(t.id)}
             onRepost={() => toggleRepost(t.id)}
             onShare={() => onShare(t.id)}
-            onReply={() => onReply(t.id, t.handle)}
+            onReply={() => onReply(t.id)}
             repostedByMe={repostedByMe}
             likesCount={t.likes}
             repostsCount={t.reposts}

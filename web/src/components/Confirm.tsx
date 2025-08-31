@@ -32,7 +32,7 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
     return new Promise<boolean>((resolve) => setResolver(() => resolve));
   }, []);
 
-  const close = (val: boolean) => {
+  const close = useCallback((val: boolean) => {
     setOpen(false);
     if (resolver) resolver(val);
     setResolver(null);
@@ -41,7 +41,7 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
       setTimeout(() => lastActiveRef.current?.focus(), 0);
       lastActiveRef.current = null;
     }
-  };
+  }, [resolver]);
 
   // Focus management and keyboard handling
   useEffect(() => {
@@ -78,7 +78,7 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
     };
     document.addEventListener("keydown", handleKey);
     return () => document.removeEventListener("keydown", handleKey);
-  }, [open]);
+  }, [open, close]);
 
   return (
     <ConfirmContext.Provider value={{ confirm }}>

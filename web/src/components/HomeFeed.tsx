@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import useSWRInfinite from "swr/infinite";
 import { EchoSkeletonList } from "@/components/Skeletons";
 import EchoList from "@/components/EchoList";
@@ -52,7 +52,7 @@ export default function HomeFeed() {
     }, { rootMargin: "200px" });
     obs.observe(el);
     return () => obs.disconnect();
-  }, [hasMore, size]);
+  }, [hasMore, size, setSize]);
 
   const onPost = async (text: string) => {
     // Create then mutate first page to include new echo at top

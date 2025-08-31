@@ -72,7 +72,7 @@ export default function ProfileFeed({ username, tab, initialEchoes, initialLikes
       if (tab === "echoes") lsetSize(1); else esetSize(1);
     });
     return () => cancelAnimationFrame(id);
-  }, [username]);
+  }, [username, tab, lsetSize, esetSize]);
 
   // Infinite scroll sentinel
   useEffect(() => {
@@ -87,7 +87,7 @@ export default function ProfileFeed({ username, tab, initialEchoes, initialLikes
     }, { rootMargin: "200px" });
     obs.observe(el);
     return () => obs.disconnect();
-  }, [hasMore, esize, lsize, tab]);
+  }, [hasMore, esize, lsize, tab, esetSize, lsetSize]);
 
   if (loading && activeItems.length === 0) return <EchoSkeletonList count={4} />;
   return (
