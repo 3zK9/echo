@@ -38,10 +38,16 @@ export default async function UserProfilePage({
     (!!fallback && fallback === unameLower) ||
     unameLower === "you"
   );
-  const displayName = isMe ? (session?.user?.name || username) : username;
+  // Try to load the DB user to prefer their GitHub avatar when viewing others
+  let dbUser: { image: string | null; name: string | null } | null = null;
+  try {
+    dbUser = await prisma.user.findFirst({ where: { username: username }, select: { image: true, name: true } });
+  } catch {}
+
+  const displayName = isMe ? (session?.user?.name || username) : (dbUser?.name || username);
   const avatar = isMe
     ? (session?.user?.image || `https://api.dicebear.com/9.x/identicon/png?seed=${encodeURIComponent((meUsername || username).toLowerCase())}`)
-    : `https://api.dicebear.com/9.x/identicon/png?seed=${encodeURIComponent(username.toLowerCase())}`;
+    : (dbUser?.image || `https://api.dicebear.com/9.x/identicon/png?seed=${encodeURIComponent(username.toLowerCase())}`);
 
   const makeHref = (t: "echoes" | "likes") => {
     const sp = new URLSearchParams();
@@ -53,9 +59,11 @@ export default async function UserProfilePage({
   let initialBio: string | undefined = undefined;
   let initialLink: string | null | undefined = undefined;
   try {
-    const u = await prisma.user.findFirst({ where: { username: username } });
-    if (u) {
-      const prof = await prisma.profile.findUnique({ where: { userId: u.id } });
+    if (!dbUser) {
+      dbUser = await prisma.user.findFirst({ where: { username: username }, select: { image: true, name: true, id: true } }) as any;
+    }
+    if ((dbUser as any)?.id) {
+      const prof = await prisma.profile.findUnique({ where: { userId: (dbUser as any).id } });
       initialBio = prof?.bio || "";
       initialLink = (prof?.link as string | null) ?? null;
     }

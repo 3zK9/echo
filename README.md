@@ -1,38 +1,53 @@
-# Echo — Minimal Twitter-like UI
+# Echo — Minimal Twitter‑like App
 
-A Next.js App Router project that mimics a lightweight Twitter experience: compose “echoes”, like, repost, mention users, and browse profiles — all styled with Tailwind and authenticated via GitHub OAuth using NextAuth.
+A Next.js App Router app that mimics a lightweight Twitter experience: compose “echoes”, like, repost, mention users, and browse profiles — styled with Tailwind and authenticated via GitHub OAuth (NextAuth). Data is persisted in Postgres via Prisma, and the UI uses SWR with infinite scrolling, optimistic updates, and background prefetching.
 
-This repo contains the web app under `web/` and a minimal root setup for docs and tooling.
+The app lives under `web//`.
 
 ## Features
 
-- **Splash sign-on:** Unauthenticated visitors to `/` see a splash page with a single “Sign in with GitHub” button. Protected routes redirect to the splash and return you to your original page after login.
-- **GitHub Auth:** NextAuth with GitHub OAuth. Username is derived from your GitHub login.
-- **First-time setup:** After login, a cookie `echo_setup=done` is set via `/setup` before allowing full access.
-- **Home feed:** Compose new echoes, like/unlike, repost/unrepost, and share via the Web Share API or clipboard fallback.
-- **Mentions → profiles:** `@username` in text and the echo header handle link to that user’s profile.
-- **Profiles:** Dynamic route at `/profile/[user]` with tabs for Echoes and Likes. Includes a compact header with avatar and an editable bio (stored locally).
-- **Local state:** Echoes and bios persist in `localStorage` during development. There is no backend database yet.
-- **Toasts:** Simple in-app notifications.
+- Splash sign‑on: unauthenticated visitors to `/` see a splash page (NextAuth GitHub sign‑in).
+- Auth: NextAuth (JWT session strategy) + Prisma adapter. Username is derived from your GitHub login.
+- First‑time setup: `/setup` route handler sets a cookie (`echo_setup=done`) then redirects.
+- Global Home feed: paginated (cursor), SWR infinite scrolling, optimistic create/like/repost, and background revalidation.
+- Mentions → profiles: `@username` links to `/profile/[username]`.
+- Profiles: `/profile/[user]` with Echoes/Likes tabs, infinite scroll, cached tab switching, and background prefetch. Echoes tab shows both originals and your reposts. Likes tab excludes reposts.
+- Bio + Link: editable (bio 280 chars) with counters; server‑persisted via Prisma.
+- Mobile UX: bottom navigation (Home, Compose, Profile menu). Profile menu includes a confirm‑on‑sign‑out.
+- Prefetch: profile lists + meta prefetch on hover; app prewarms your own profile after sign‑in.
+- Security: route gating via middleware (JWT or NextAuth session cookie), CSP headers, mutation origin checks, and safe link normalization.
+- Toasts + confirm dialogs for key actions.
 
 ## Tech Stack
 
-- `Next.js 15` (App Router) + `React 19`
-- `TypeScript`
-- `Tailwind CSS v4`
-- `next-auth` (GitHub provider)
+- Next.js 15 (App Router) + React 19 + TypeScript
+- Tailwind CSS v4
+- NextAuth (GitHub provider) — JWT session strategy
+- Prisma + Postgres (Supabase‑friendly) with pooled connections in prod
+- SWR (infinite scroll, background revalidation)
 
-## Repo Layout
+## Repo Layout (web/)
 
-- `web/` — Next.js app
-  - `src/app/page.tsx` — Splash or Home feed (depending on auth)
-  - `src/app/profile/[user]/page.tsx` — Dynamic profile route with Echoes/Likes tabs
-  - `src/app/login/page.tsx` — Redirects to `/` (splash sign-on)
-  - `middleware.ts` — Auth gating and setup redirect
-  - `src/components/` — UI components (Feed, Echo, Sidebar, Splash, etc.)
-  - `src/state/` — Client state for echoes and profiles (localStorage)
+- `src/app/page.tsx` — Home (uses `HomeFeed`)
+- `src/app/profile/[user]/page.tsx` — Profile shell (client `ProfileView` manages tabs + URL)
+- `src/app/setup/route.ts` — Sets setup cookies then redirects to `/`
+- `src/app/api/*` — App Router API routes (echoes, likes, repost, profile)
+- `middleware.ts` — Auth gating: allows `/`, `/api/auth/*`, etc. Uses JWT or session cookie
+- `src/components/`
+  - `HomeFeed.tsx` — SWR infinite home feed + Compose
+  - `ProfileFeed.tsx` — SWR infinite Echoes/Likes with prefetch + infinite scroll
+  - `ProfileHeader.tsx` — Avatar, bio/link editor with counters
+  - `Echo.tsx` / `EchoList.tsx` — Echo component + list (optimistic like/repost)
+  - `BottomNav.tsx` — Mobile nav with Profile menu + confirm sign out
+  - `Confirm.tsx` / `Toast.tsx` — dialog + toast providers
+- `src/lib/`
+  - `db.ts` — Prisma client singleton
+  - `security.ts` — mutation origin checks
+  - `swr.ts` — SWR config + fetcher
+  - `keys.ts` — SWR cache keys
+- `prisma/` — Prisma schema + committed migrations
 
-## Getting Started
+## Getting Started (Local)
 
 1) Install dependencies
 
@@ -51,18 +66,19 @@ This repo contains the web app under `web/` and a minimal root setup for docs an
 4) Configure environment
 
 - Copy `web/.env.example` to `web/.env.local` and fill in:
-  - `AUTH_SECRET` — any random secret (use `openssl rand -base64 32`)
-  - `AUTH_GITHUB_ID` — your GitHub OAuth Client ID
-  - `AUTH_GITHUB_SECRET` — your GitHub OAuth Client Secret
-  - `DATABASE_URL` — Supabase Postgres connection string
+  - `NEXTAUTH_SECRET` — random secret (or `AUTH_SECRET`, the code supports both)
+  - `AUTH_GITHUB_ID` — GitHub OAuth Client ID
+  - `AUTH_GITHUB_SECRET` — GitHub OAuth Client Secret
+  - `AUTH_TRUST_HOST=true`
+  - `DATABASE_URL` — your local Postgres (or Supabase) connection string
 
-Important: Prisma reads DATABASE_URL from `web/.env` (not `.env.local`) when running CLI commands like `prisma migrate`. Create `web/.env` with the same `DATABASE_URL` value or export it inline when running Prisma.
+Important: Prisma CLI reads from `web/.env`. Create `web/.env` with at least `DATABASE_URL=...` (and optionally `DIRECT_URL=...`).
 
 5) (First time) Initialize Prisma
 
 - From `web/`:
   - `npm run prisma:generate`
-  - Ensure `web/.env` contains `DATABASE_URL=...` (or run the next command with `DATABASE_URL=...` inline)
+  - Ensure `web/.env` contains `DATABASE_URL=...`
   - `npm run prisma:migrate -- -n init`
 
 If you accidentally named it `DATABASE_URI`:
@@ -74,39 +90,52 @@ If you accidentally named it `DATABASE_URI`:
 
 - `npm run dev` (in `web/`), then open `http://localhost:3000`
 
-## Current Behavior Details
+## Behavior Details
 
 - Visiting `/` while signed out shows the splash. Clicking “Sign in with GitHub” starts OAuth. After sign-in (and setup), you land on Home.
 - Protected routes (e.g., `/profile/[user]`) redirect to `/?callbackUrl=...` when signed out. After signing in, you return to the original page.
 - Mentions like `@alice` link to `/profile/alice`. Tabs retain the user via `?tab=echoes|likes`.
-- Profile bio is editable only on your own profile and is saved to `localStorage`.
+- Profile bio/link are editable only on your own profile and persist to the database.
+- Home feed is global (all users). Profile Echoes show originals and your reposts; Likes exclude reposts.
+- SWR infinite scrolling for Home and Profile. Optimistic like/repost/create with rollback on error.
 
 ## Environment Variables
 
-All env vars are read from `web/.env.local` during development.
+Local (web/.env.local)
+- `NEXTAUTH_SECRET` (or `AUTH_SECRET`) — NextAuth secret
+- `AUTH_GITHUB_ID`, `AUTH_GITHUB_SECRET`
+- `AUTH_TRUST_HOST=true`
+- `DATABASE_URL` — your Postgres URL (in `web/.env` for Prisma CLI)
 
-- `AUTH_SECRET` — NextAuth secret
-- `AUTH_GITHUB_ID` — GitHub OAuth Client ID
-- `AUTH_GITHUB_SECRET` — GitHub OAuth Client Secret
-- `AUTH_TRUST_HOST=true` — helpful for local dev
+Production (Vercel → Project → Settings → Environment Variables)
+- `NEXTAUTH_URL=https://your-domain.tld`
+- `NEXTAUTH_SECRET` and `AUTH_SECRET` — set both to the same value
+- `AUTH_GITHUB_ID`, `AUTH_GITHUB_SECRET`
+- `AUTH_TRUST_HOST=true`
+- `DATABASE_URL` — pooled PgBouncer URL (6543) with `pgbouncer=true&connection_limit=1`
+- `DIRECT_URL` — direct URL (5432) for Prisma migrations
 
 Never commit real secrets. Use the provided `.gitignore` rules and keep `.env.local` out of version control.
 
-## Next Steps (Suggested)
+## Next Steps / Feature Ideas
 
-- **Wire to DB (in progress):** We’ve added Prisma + schema for Supabase. Next steps are to: add Prisma Adapter to NextAuth, implement API routes for echoes/likes/bio, and swap the UI from local state to server-backed data with optimistic updates.
-- **Mentions/hashtags:** Linkify `#hashtags` and add a basic search/explore page.
-- **Repost model:** Track reposter relationships and aggregate stats server-side.
-- **Media uploads:** Support image/video attachments in echoes.
-- **Notifications:** Basic notifications for mentions and likes.
-- **Validation & limits:** Character limits, input validation, and better counters for compose/bio.
-- **Tests & DX:** Add unit/integration tests and CI checks.
+- Personalized Home feed (following). Add Follows model + queries and a follow UI.
+- Hashtags and search (linkify `#tag`, simple search page, trending topics service).
+- Media uploads (images/video) with signed uploads (e.g., S3) and previews.
+- Notifications (mentions, likes, reposts) with a bell menu and badge counts.
+- Rate limiting and abuse protection on POST routes.
+- Better error surfaces + toasts + retry on transient errors.
+- Delete echo confirm (exists) + undo window (optimistic restore).
+- A11y polish: focus states, ARIA on menus/dialogs, keyboard nav.
+- SEO/OG tags for profiles, canonical site URL config.
+- Tighten CSP with nonces/hashes once stable.
+- Tests: unit tests for utils/mapping and API route tests; simple Playwright flows.
 
 ## Notes & Limitations
 
-- Data is client-side only and persists via `localStorage` during development; it is not multi-user persistent.
-- `web/.env.example` contains sample values — do not use them in production.
-- Remote images allowed for GitHub avatars and DiceBear via `next.config.ts`.
+- Remote images are allowed for GitHub avatars and DiceBear via `next.config.ts`.
+- Vercel caching requires explicit `prisma generate` in the build (handled in `vercel.json`).
+- Route handlers in Next 15 accept `{ params: Promise<...> }` — see API files for the current typing pattern.
 
 ---
 
@@ -114,28 +143,19 @@ Questions or want me to wire up a minimal backend to persist echoes and bios? Ha
 
 ## Deploy to Vercel
 
-- Project root: set to `web/` in Vercel (Project Settings → General → Root Directory).
-- Build Command: already configured via `web/vercel.json` as `npm run prisma:deploy && npm run build`.
-- Install Command: `npm ci` (default; also in `vercel.json`).
+- Root Directory: `web/`
+- vercel.json build steps:
+  - `npm run prisma:generate && if [ "$VERCEL_ENV" = "production" ]; then npm run prisma:deploy; fi && npm run build`
+- Install Command: `npm ci`
 
-Environment variables (Production):
-- `NEXTAUTH_URL=https://your-domain.tld`
-- `AUTH_SECRET` — long random string
-- `AUTH_GITHUB_ID`, `AUTH_GITHUB_SECRET` — from your GitHub OAuth app
-- `AUTH_TRUST_HOST=true`
-- `DATABASE_URL` — Supabase pooled (PgBouncer) URL, e.g.
-  - `postgresql://USER:PASSWORD@aws-1-REGION.pooler.supabase.com:6543/postgres?pgbouncer=true&connection_limit=1`
-- `DIRECT_URL` — Supabase direct URL (5432) for migrations, e.g.
-  - `postgresql://USER:PASSWORD@aws-1-REGION.supabase.com:5432/postgres`
-
-Why pooled + direct:
-- The app at runtime uses the pooled `DATABASE_URL` to avoid connection exhaustion.
-- Prisma’s migrations use the `DIRECT_URL` for a direct connection with full features.
+Environment (Production): see “Environment Variables” above.
 
 GitHub OAuth (prod):
-- Homepage URL: `https://your-domain.tld`
-- Authorization callback URL: `https://your-domain.tld/api/auth/callback/github`
+- Homepage: `https://your-domain.tld`
+- Callback: `https://your-domain.tld/api/auth/callback/github`
 
-Migrations in CI/Prod:
-- Migrations are committed under `web/prisma/migrations/`.
-- Vercel runs `npm run prisma:deploy` before build (from `vercel.json`).
+Troubleshooting (prod):
+- Blank page → likely CSP: ensure `script-src 'unsafe-inline' 'unsafe-eval' blob:` present in `next.config.ts` headers.
+- Prisma client error on Vercel → ensure `prisma generate` runs in build (vercel.json).
+- Auth redirect loop → check `NEXTAUTH_URL`, `NEXTAUTH_SECRET`/`AUTH_SECRET` and that GitHub OAuth callback matches domain.
+- If you switched from DB sessions to JWT, sign out/in to refresh cookies.
