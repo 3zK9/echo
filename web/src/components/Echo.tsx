@@ -6,72 +6,99 @@ import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { ReplyIcon, RetweetIcon, HeartIcon, UploadIcon, TrashIcon } from "@/components/icons";
 import { prefetchProfile, prefetchProfileMetaToLocal } from "@/lib/prefetch";
+import Prism from "prismjs";
+// Core/common
+import "prismjs/components/prism-clike";
+import "prismjs/components/prism-markup"; // html/xml/svg
+import "prismjs/components/prism-css";
+import "prismjs/components/prism-javascript";
+import "prismjs/components/prism-jsx";
+import "prismjs/components/prism-typescript";
+import "prismjs/components/prism-tsx";
+// Data / scripting
+import "prismjs/components/prism-json";
+import "prismjs/components/prism-bash";
+import "prismjs/components/prism-yaml";
+import "prismjs/components/prism-markdown";
+// General purpose
+import "prismjs/components/prism-python";
+import "prismjs/components/prism-sql";
+import "prismjs/components/prism-ruby";
+import "prismjs/components/prism-perl";
+import "prismjs/components/prism-r";
+import "prismjs/components/prism-ocaml";
+import "prismjs/components/prism-java";
+import "prismjs/components/prism-c";
+import "prismjs/components/prism-cpp";
+import "prismjs/components/prism-csharp";
+import "prismjs/components/prism-go";
+import "prismjs/components/prism-rust";
+import "prismjs/components/prism-matlab";
+import "prismjs/components/prism-objectivec";
+import "prismjs/components/prism-swift";
+import "prismjs/components/prism-scala";
+import "prismjs/components/prism-kotlin";
+import "prismjs/components/prism-php";
+import "prismjs/components/prism-haskell";
+import "prismjs/components/prism-lisp";
+import "prismjs/components/prism-scheme";
+import "prismjs/components/prism-elixir";
+import "prismjs/components/prism-dart";
+import "prismjs/components/prism-lua";
+import "prismjs/components/prism-powershell";
+import "prismjs/components/prism-shell-session";
 
-function highlight(code: string, lang?: string): React.ReactNode {
+function highlight(code: string, lang?: string): string {
   const l = (lang || "").toLowerCase();
-  // Use raw code as text nodes; React safely escapes when rendering
-  const src = code;
-  // Very small regex-based highlighter for common languages
-  const patterns: Record<string, { re: RegExp; cls: string }[]> = {
-    js: [
-      { re: /\/(?:\*[^]*?\*\/|\/\/.*)/g, cls: "tok-cmt" },
-      { re: /\b(?:import|export|from|as|if|else|for|while|do|switch|case|break|continue|try|catch|finally|throw|return|new|class|extends|super|this|function|const|let|var|typeof|instanceof|in|of|void|yield|async|await|delete)\b/g, cls: "tok-kw" },
-      { re: /\b(?:true|false|null|undefined|NaN|Infinity)\b/g, cls: "tok-lit" },
-      { re: /([A-Za-z_$][A-Za-z0-9_$]*)\s*(?=\()/g, cls: "tok-fn" },
-      { re: /0x[0-9a-fA-F]+|\b\d+(?:\.\d+)?\b/g, cls: "tok-num" },
-      { re: /(['"])(?:\\.|(?!\1).)*\1/g, cls: "tok-str" },
-      { re: /`(?:\\.|[^`])*`/g, cls: "tok-str" },
-    ],
-    ts: [],
-    tsx: [],
-    jsx: [],
-    json: [
-      { re: /\/(?:\*[^]*?\*\/|\/\/.*)/g, cls: "tok-cmt" },
-      { re: /([{}\[\]:,])/g, cls: "tok-punc" },
-      { re: /"(?:\\.|[^"])*"(?=\s*:)/g, cls: "tok-key" },
-      { re: /"(?:\\.|[^"])*"/g, cls: "tok-str" },
-      { re: /-?\b\d+(?:\.\d+)?\b/g, cls: "tok-num" },
-      { re: /\b(?:true|false|null)\b/g, cls: "tok-lit" },
-    ],
-    py: [
-      { re: /#.*$/gm, cls: "tok-cmt" },
-      { re: /\b(?:def|class|import|from|as|if|elif|else|for|while|try|except|finally|raise|return|with|lambda|yield|pass|break|continue|and|or|not|in|is)\b/g, cls: "tok-kw" },
-      { re: /(['"])\1\1[^]*?\1\1\1/g, cls: "tok-str" },
-      { re: /(['"])(?:\\.|(?!\1).)*\1/g, cls: "tok-str" },
-      { re: /\b(?:True|False|None)\b/g, cls: "tok-lit" },
-      { re: /\b\d+(?:\.\d+)?\b/g, cls: "tok-num" },
-    ],
-    sql: [
-      { re: /--.*$/gm, cls: "tok-cmt" },
-      { re: /\/\*[^]*?\*\//g, cls: "tok-cmt" },
-      { re: /\b(?:select|insert|update|delete|from|where|and|or|not|into|values|set|create|table|primary|key|foreign|references|join|left|right|inner|outer|on|group|by|order|limit|offset|having|as)\b/gi, cls: "tok-kw" },
-      { re: /(['"])(?:\\.|(?!\1).)*\1/g, cls: "tok-str" },
-      { re: /\b\d+(?:\.\d+)?\b/g, cls: "tok-num" },
-    ],
+  const map: Record<string, string> = {
+    // Core
+    js: "javascript", javascript: "javascript", jsx: "jsx",
+    ts: "typescript", typescript: "typescript", tsx: "tsx",
+    json: "json", bash: "bash", sh: "bash",
+    yaml: "yaml", yml: "yaml", md: "markdown", markdown: "markdown",
+    html: "markup", xml: "markup", svg: "markup",
+    css: "css",
+    // Popular
+    py: "python", python: "python", py3: "python", python3: "python", sql: "sql",
+    rb: "ruby", ruby: "ruby",
+    pl: "perl", perl: "perl",
+    r: "r",
+    ml: "ocaml", ocaml: "ocaml",
+    java: "java",
+    c: "c",
+    'c++': "cpp", cpp: "cpp",
+    'c#': "csharp", csharp: "csharp", cs: "csharp",
+    go: "go",
+    rs: "rust", rust: "rust",
+    matlab: "matlab",
+    octave: "matlab",
+    objc: "objectivec", "objective-c": "objectivec", objectivec: "objectivec",
+    "obj-c": "objectivec", "obj-c++": "objectivec", "objective-c++": "objectivec", "objc++": "objectivec", mm: "objectivec",
+    scala: "scala",
+    kt: "kotlin", kotlin: "kotlin",
+    php: "php",
+    hs: "haskell", haskell: "haskell",
+    lisp: "lisp",
+    racket: "scheme",
+    elixir: "elixir", ex: "elixir", exs: "elixir",
+    dart: "dart",
+    lua: "lua",
+    sbt: "scala",
+    zsh: "bash", shell: "bash",
+    powershell: "powershell", ps: "powershell", ps1: "powershell",
+    "shell-session": "shell-session", console: "shell-session",
+    swift: "swift",
   };
-
-  const langs = ["ts", "tsx", "jsx"].includes(l) ? "js" : (l === "javascript" ? "js" : (l === "python" ? "py" : (l === "" ? "js" : l)));
-  const rules = patterns[langs] || patterns.js;
-
-  // Apply regexes sequentially by splitting and wrapping matches
-  let nodes: React.ReactNode[] = [src];
-  for (const { re, cls } of rules) {
-    const next: React.ReactNode[] = [];
-    for (const fragment of nodes) {
-      if (typeof fragment !== "string") { next.push(fragment); continue; }
-      let last = 0;
-      fragment.replace(re, (m, ...args) => {
-        const idx = (args[args.length - 2] as number) ?? 0; // match index
-        if (idx > last) next.push(fragment.slice(last, idx));
-        next.push(<span className={cls} key={`${cls}-${idx}-${m.length}`}>{m}</span>);
-        last = idx + m.length;
-        return m;
-      });
-      if (last < fragment.length) next.push(fragment.slice(last));
-    }
-    nodes = next;
+  const alias = map[l] || "javascript";
+  const grammar = (Prism.languages as any)[alias] || Prism.languages.javascript;
+  try {
+    return Prism.highlight(code, grammar, alias);
+  } catch {
+    return code
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
   }
-  return nodes;
 }
 
 function renderMarkdownWithCode(input: string): React.ReactNode[] {
@@ -85,9 +112,12 @@ function renderMarkdownWithCode(input: string): React.ReactNode[] {
       const text = input.slice(last, m.index);
       out.push(renderInlineText(text));
     }
+    const codeHtml = highlight(body.replace(/\n$/, ""), lang);
+    const cls = `language-${(lang || "").toLowerCase() || "javascript"}`;
     out.push(
-      <pre className="code-block" key={`code-${m.index}`}>
-        <code>{highlight(body.replace(/\n$/, ""), lang)}</code>
+      <pre className={`code-block ${cls}`} key={`code-${m!.index}`}>
+        {/* eslint-disable-next-line react/no-danger */}
+        <code className={cls} dangerouslySetInnerHTML={{ __html: codeHtml }} />
       </pre>
     );
     last = m.index + full.length;
