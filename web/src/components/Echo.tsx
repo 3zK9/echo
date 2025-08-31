@@ -7,18 +7,10 @@ import { useSession } from "next-auth/react";
 import { ReplyIcon, RetweetIcon, HeartIcon, UploadIcon, TrashIcon } from "@/components/icons";
 import { prefetchProfile, prefetchProfileMetaToLocal } from "@/lib/prefetch";
 
-function escapeHtml(s: string) {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
-}
-
 function highlight(code: string, lang?: string): React.ReactNode {
   const l = (lang || "").toLowerCase();
-  const src = escapeHtml(code);
+  // Use raw code as text nodes; React safely escapes when rendering
+  const src = code;
   // Very small regex-based highlighter for common languages
   const patterns: Record<string, { re: RegExp; cls: string }[]> = {
     js: [
