@@ -83,6 +83,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ user
       reposts: (t as any)._count?.reposts ?? 0,
       replies: (t as any)._count?.replies ?? 0,
       replyingTo: (t.replyTo?.author?.username || sanitizeHandle(t.replyTo?.author?.name || undefined)) || undefined,
+      rootId: (rootIdMap.get(t.id) || t.id),
       liked: likedSet.has(t.id),
       reposted: false,
       avatarUrl: t.author?.image || undefined,

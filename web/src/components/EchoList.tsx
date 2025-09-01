@@ -164,7 +164,7 @@ export default function EchoList({ items, username }: { items: Echo[]; username?
             onLike={() => toggleLike(t.id)}
             onRepost={() => toggleRepost(t.id)}
             onShare={() => onShare(t.id)}
-            onReply={() => onReply(t.originalId ?? t.id)}
+            onReply={() => onReply((t as any).rootId ?? t.originalId ?? t.id)}
             repostedByMe={repostedByMe}
             likesCount={t.likes}
             repostsCount={t.reposts}
