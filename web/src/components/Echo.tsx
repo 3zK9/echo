@@ -103,25 +103,40 @@ function highlight(code: string, lang?: string): string {
 
 function renderMarkdownWithCode(input: string): React.ReactNode[] {
   const out: React.ReactNode[] = [];
-  const fence = /```([a-zA-Z0-9#+._-]*)\n([\s\S]*?)```/g;
-  let last = 0;
-  let m: RegExpExecArray | null;
-  while ((m = fence.exec(input))) {
-    const [full, lang, body] = m;
-    if (m.index > last) {
-      const text = input.slice(last, m.index);
-      out.push(renderInlineText(text));
+  let i = 0;
+  while (i < input.length) {
+    const start = input.indexOf("```", i);
+    if (start === -1) {
+      out.push(renderInlineText(input.slice(i)));
+      break;
     }
-    const codeHtml = highlight(body.replace(/\n$/, ""), lang);
+    if (start > i) out.push(renderInlineText(input.slice(i, start)));
+    // Parse language token
+    let j = start + 3;
+    while (j < input.length && /[A-Za-z0-9#+._-]/.test(input[j])) j++;
+    const lang = input.slice(start + 3, j);
+    if (input[j] === ' ') j++;
+    let bodyStart = j;
+    let end = -1;
+    if (input[j] === '\n') {
+      bodyStart = j + 1;
+    }
+    end = input.indexOf("```", bodyStart);
+    if (end === -1) {
+      // No closing fence; treat as text
+      out.push(renderInlineText(input.slice(start)));
+      break;
+    }
+    const body = input.slice(bodyStart, end).replace(/\n$/, "");
+    const codeHtml = highlight(body, lang);
     const cls = `language-${(lang || "").toLowerCase() || "javascript"}`;
     out.push(
-      <pre className={`code-block ${cls}`} key={`code-${m!.index}`}>
+      <pre className={`code-block ${cls}`} key={`code-${start}`}>
         <code className={cls} dangerouslySetInnerHTML={{ __html: codeHtml }} />
       </pre>
     );
-    last = m.index + full.length;
+    i = end + 3;
   }
-  if (last < input.length) out.push(renderInlineText(input.slice(last)));
   return out;
 }
 
