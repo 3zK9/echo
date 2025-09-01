@@ -7,7 +7,7 @@ import useSWRInfinite from "swr/infinite";
 import { keys } from "@/lib/keys";
 import type { Echo } from "@/components/Echo";
 
-export default function ProfileFeed({ username, tab, initialEchoes, initialLikes, initialEchoCursor = null, initialLikesOffset = null }: { username: string; tab: "echoes" | "likes"; initialEchoes?: Echo[]; initialLikes?: Echo[]; initialEchoCursor?: string | null; initialLikesOffset?: number | null }) {
+export default function ProfileFeed({ username, tab, initialEchoes, initialLikes, initialReplies, initialEchoCursor = null, initialLikesOffset = null, initialRepliesCursor = null }: { username: string; tab: "echoes" | "likes" | "replies"; initialEchoes?: Echo[]; initialLikes?: Echo[]; initialReplies?: Echo[]; initialEchoCursor?: string | null; initialLikesOffset?: number | null; initialRepliesCursor?: string | null }) {
   const LIMIT = 20;
   const sentinelRef = useRef<HTMLDivElement | null>(null);
 
@@ -52,7 +52,7 @@ export default function ProfileFeed({ username, tab, initialEchoes, initialLikes
 
   const echoItems = edata ? edata.flatMap((p: any) => p.items as Echo[]) : [];
   const likeItems = ldata ? ldata.flatMap((p: any) => p.items as Echo[]) : [];
-  const activeItemsRaw = tab === "echoes" ? echoItems : likeItems;
+  const activeItemsRaw = tab === "echoes" ? echoItems : (tab === "likes" ? likeItems : (rdata ? rdata.flatMap((p: any) => p.items as Echo[]) : []));
   const activeItems = (() => {
     const seen = new Set<string>();
     const out: Echo[] = [] as any;
@@ -63,13 +63,23 @@ export default function ProfileFeed({ username, tab, initialEchoes, initialLikes
     }
     return out;
   })();
-  const hasMore = tab === "echoes" ? (edata ? edata[edata.length - 1]?.nextCursor != null : false) : (ldata ? ldata[ldata.length - 1]?.nextOffset != null : false);
-  const loading = tab === "echoes" ? (evalid && echoItems.length === 0) : (lvalid && likeItems.length === 0);
+  const hasMore = tab === "echoes"
+    ? (edata ? edata[edata.length - 1]?.nextCursor != null : false)
+    : tab === "likes"
+      ? (ldata ? ldata[ldata.length - 1]?.nextOffset != null : false)
+      : (rdata ? rdata[rdata.length - 1]?.nextCursor != null : false);
+  const loading = tab === "echoes"
+    ? (evalid && echoItems.length === 0)
+    : tab === "likes"
+      ? (lvalid && likeItems.length === 0)
+      : (rvalid && (rdata ? rdata.flatMap((p: any) => p.items as Echo[]).length === 0 : true));
 
   // Prefetch the other tab for instant switching
   useEffect(() => {
     const id = requestAnimationFrame(() => {
-      if (tab === "echoes") lsetSize(1); else esetSize(1);
+      if (tab === "echoes") { lsetSize(1); rsetSize(1); }
+      else if (tab === "likes") { esetSize(1); rsetSize(1); }
+      else { esetSize(1); lsetSize(1); }
     });
     return () => cancelAnimationFrame(id);
   }, [username, tab, lsetSize, esetSize]);
@@ -81,13 +91,13 @@ export default function ProfileFeed({ username, tab, initialEchoes, initialLikes
     const obs = new IntersectionObserver((entries) => {
       entries.forEach((e) => {
         if (e.isIntersecting && hasMore) {
-          if (tab === "echoes") esetSize(esize + 1); else lsetSize(lsize + 1);
+          if (tab === "echoes") esetSize(esize + 1); else if (tab === "likes") lsetSize(lsize + 1); else rsetSize(rsize + 1);
         }
       });
     }, { rootMargin: "200px" });
     obs.observe(el);
     return () => obs.disconnect();
-  }, [hasMore, esize, lsize, tab, esetSize, lsetSize]);
+  }, [hasMore, esize, lsize, rsize, tab, esetSize, lsetSize, rsetSize]);
 
   if (loading && activeItems.length === 0) return <EchoSkeletonList count={4} />;
   return (

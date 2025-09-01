@@ -20,6 +20,9 @@ body {
   .panel {
     @apply rounded-2xl bg-white/5 border border-white/10 backdrop-blur shadow-xl shadow-black/30;
   }
+  .panel-soft {
+    @apply rounded-2xl bg-white/10 border border-white/10 backdrop-blur;
+  }
   .btn-primary {
     @apply rounded-full text-white font-semibold px-5 py-3 bg-gradient-to-r from-violet-500 to-sky-500 hover:from-violet-400 hover:to-sky-400 transition;
   }

@@ -19,7 +19,8 @@ export default async function UserProfilePage({
   searchParams: Promise<{ tab?: string }>;
 }) {
   const sp = await searchParams;
-  const tab = (sp?.tab === "likes" ? "likes" : "echoes") as "echoes" | "likes";
+  const tabParam = sp?.tab;
+  const tab = (tabParam === "likes" ? "likes" : tabParam === "replies" ? "replies" : "echoes") as "echoes" | "likes" | "replies";
   const session = await getServerSession(authOptions);
   if (!session) {
     const p = await params;
