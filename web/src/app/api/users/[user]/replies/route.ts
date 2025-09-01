@@ -56,6 +56,21 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ user
       const likes = await prisma.echoLike.findMany({ where: { userId: meId, echoId: { in: echoes.map((e) => e.id) } }, select: { echoId: true } });
       likes.forEach((l) => likedSet.add(l.echoId));
     }
+    // Compute rootId for each reply by following replyToId chain to the top-level echo
+    const rootIdMap = new Map<string, string>();
+    for (const t of echoes as any[]) {
+      let curId: string | null = (t as any).replyToId as string | null;
+      let lastId: string = t.id as string;
+      let hops = 0;
+      while (curId && hops < 20) {
+        lastId = curId;
+        const parent = await prisma.echo.findUnique({ where: { id: curId }, select: { id: true, replyToId: true } });
+        if (!parent) break;
+        curId = (parent.replyToId as string | null) ?? null;
+        hops++;
+      }
+      rootIdMap.set(t.id, lastId);
+    }
     const hasMore = echoes.length > limit;
     const page = hasMore ? echoes.slice(0, limit) : echoes;
     const rows = page.map((t) => ({

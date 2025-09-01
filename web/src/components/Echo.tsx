@@ -257,6 +257,7 @@ export type Echo = {
   reposts: number;
   replies?: number;
   replyingTo?: string;
+  rootId?: string;
   liked?: boolean;
   reposted?: boolean;
   avatarUrl?: string;
@@ -294,7 +295,7 @@ function EchoItem({
 
   const renderText = (input: string) => renderMarkdownWithCode(input);
   const openThread = () => {
-    const baseId = t.originalId ?? t.id;
+    const baseId = t.rootId || t.originalId || t.id;
     if (!baseId) return;
     router.push(`/echo/${encodeURIComponent(baseId)}`);
   };
