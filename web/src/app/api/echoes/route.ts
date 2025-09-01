@@ -46,6 +46,7 @@ export async function GET(req: Request) {
     const limit = Math.max(1, Math.min(50, parseInt(url.searchParams.get("limit") || "20", 10)));
     const cursor = url.searchParams.get("cursor") || undefined;
     const echoes = await prisma.echo.findMany({
+      where: { replyToId: null },
       orderBy: { id: "desc" },
       take: limit + 1,
       ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),

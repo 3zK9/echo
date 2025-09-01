@@ -13,6 +13,14 @@ export default function EchoThread({ echoId }: { echoId: string }) {
 
   const { data: head } = useSWR(["echo", echoId], async () => {
     const res = await fetch(`/api/echoes/${encodeURIComponent(echoId)}`, { cache: "no-store" });
+
+  // Prefill reply textarea with @username of the author
+  useEffect(() => {
+    if (!head) return;
+    const handle = (head as any)?.handle as string | undefined;
+    if (handle && !text) setText(`@${handle} `);
+  }, [head]);
+
     if (!res.ok) throw new Error("fetch_head_failed");
     return res.json();
   });

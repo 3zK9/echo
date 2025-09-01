@@ -3,6 +3,7 @@
 import React, { useEffect, useRef } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { ReplyIcon, RepostIcon, HeartIcon, UploadIcon, TrashIcon } from "@/components/icons";
 import { prefetchProfile, prefetchProfileMetaToLocal } from "@/lib/prefetch";
@@ -234,6 +235,7 @@ function renderMentions(input: string) {
         prefetch
         href={`/profile/${encodeURIComponent(handle)}`}
         onMouseEnter={() => { prefetchProfile(handle); prefetchProfileMetaToLocal(handle); }}
+        onClick={(e) => e.stopPropagation()}
         className="text-sky-500 hover:underline"
       >
         {full}
@@ -286,12 +288,18 @@ function EchoItem({
   onDelete?: (id: string) => void;
 }) {
   const { data: session } = useSession();
+  const router = useRouter();
   const isMine = t.canDelete || (session?.user?.username && t.handle === session.user.username);
 
   const renderText = (input: string) => renderMarkdownWithCode(input);
-  
+  const openThread = () => {
+    const baseId = t.originalId ?? t.id;
+    if (!baseId) return;
+    router.push(`/echo/${encodeURIComponent(baseId)}`);
+  };
+
   return (
-    <article id={`t-${t.id}`} className="flex gap-3 px-4 py-4 border-b border-white/10 hover:bg-white/5 transition">
+    <article id={`t-${t.id}`} onClick={openThread} className="flex gap-3 px-4 py-4 border-b border-white/10 hover:bg-white/5 transition cursor-pointer">
       <div className="shrink-0">
         <Image
           src={
@@ -322,6 +330,7 @@ function EchoItem({
               prefetch
               href={`/profile/${encodeURIComponent(t.handle)}`}
               onMouseEnter={() => { prefetchProfile(t.handle); prefetchProfileMetaToLocal(t.handle); }}
+              onClick={(e) => e.stopPropagation()}
               className="text-sky-500 hover:underline"
             >
               @{t.handle}
@@ -330,13 +339,13 @@ function EchoItem({
         </header>
         <div className="mt-1 space-y-2">{renderText(t.text)}</div>
         <div className="mt-3 flex items-center gap-6 text-black/60 dark:text-white/60 text-sm">
-          <button type="button" onClick={() => onReply?.(t.id)} className="inline-flex items-center gap-2 hover:text-sky-500">
+          <button type="button" onClick={(e) => { e.stopPropagation(); onReply?.(t.id); }} className="inline-flex items-center gap-2 hover:text-sky-500">
             <ReplyIcon className="w-5 h-5 rotate-180" />
             {typeof t.replies === "number" && t.replies > 0 ? <span>{t.replies}</span> : <span className="sr-only">Reply</span>}
           </button>
           <button
             type="button"
-            onClick={() => onRepost?.(t.id)}
+            onClick={(e) => { e.stopPropagation(); onRepost?.(t.id); }}
             className={`inline-flex items-center gap-2 hover:text-green-500 ${repostedByMe ? "text-green-600" : ""}`}
             aria-pressed={!!repostedByMe}
           >
@@ -345,19 +354,19 @@ function EchoItem({
           </button>
           <button
             type="button"
-            onClick={() => onLike?.(t.id)}
+            onClick={(e) => { e.stopPropagation(); onLike?.(t.id); }}
             className={`inline-flex items-center gap-2 hover:text-pink-500 ${likedByMe ? "text-pink-600" : ""}`}
             aria-pressed={!!likedByMe}
           >
             <HeartIcon className="w-5 h-5" />
             {likesCount && likesCount > 0 ? likesCount : ""}
           </button>
-          <button type="button" onClick={() => onShare?.(t.id)} className="inline-flex items-center gap-2 hover:text-sky-500 ml-auto">
+          <button type="button" onClick={(e) => { e.stopPropagation(); onShare?.(t.id); }} className="inline-flex items-center gap-2 hover:text-sky-500 ml-auto">
             <UploadIcon className="w-5 h-5" />
             <span className="sr-only">Share</span>
           </button>
           {isMine && !t.isRepost && (
-            <button type="button" onClick={() => onDelete?.(t.id)} className="inline-flex items-center gap-2 hover:text-red-500">
+            <button type="button" onClick={(e) => { e.stopPropagation(); onDelete?.(t.id); }} className="inline-flex items-center gap-2 hover:text-red-500">
               <TrashIcon className="w-5 h-5" />
               <span className="sr-only">Delete</span>
             </button>
