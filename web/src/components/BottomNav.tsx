@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+import { usePathname } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
 import { HomeIcon, UserIcon, PlusIcon, LogoutIcon } from "@/components/icons";
 import { useConfirm } from "@/components/Confirm";
@@ -11,6 +12,7 @@ export default function BottomNav() {
   const username = (session?.user as any)?.username as string | undefined;
   const confirm = useConfirm();
   const [open, setOpen] = useState(false);
+  const pathname = usePathname();
   const menuRef = useRef<HTMLDivElement | null>(null);
 
   const showNav = !!session;
@@ -58,14 +60,16 @@ export default function BottomNav() {
         <Link href="/" className="p-2 rounded-full hover:bg-white/10" aria-label="Home">
           <HomeIcon className="w-7 h-7" />
         </Link>
-        <button
-          type="button"
+        {( !(pathname && pathname.startsWith("/profile")) ) && (
+          <button
+            type="button"
           onClick={onCompose}
           className="-mt-8 bg-gradient-to-r from-violet-500 to-sky-500 text-white rounded-full p-4 shadow-lg shadow-black/40"
-          aria-label="Compose Echo"
-        >
-          <PlusIcon className="w-6 h-6" />
-        </button>
+            aria-label="Compose Echo"
+          >
+            <PlusIcon className="w-6 h-6" />
+          </button>
+        )}
         <div className="relative" ref={menuRef}>
           <button
             type="button"
