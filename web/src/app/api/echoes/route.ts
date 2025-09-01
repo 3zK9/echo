@@ -28,6 +28,7 @@ function mapEchoRow(t: any, likedSet: Set<string>, repostedSet: Set<string>, meI
     text: display.text,
     likes: display._count?.likes ?? 0,
     reposts: display._count?.reposts ?? 0,
+    replies: display._count?.replies ?? 0,
     liked: likedSet.has(baseId),
     reposted: repostedSet.has(baseId),
     avatarUrl: display.author?.image || undefined,
@@ -50,11 +51,11 @@ export async function GET(req: Request) {
       ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
       include: {
         author: { select: { name: true, username: true, image: true } },
-        _count: { select: { likes: true, reposts: true } },
+        _count: { select: { likes: true, reposts: true, replies: true } },
         original: {
           include: {
             author: { select: { name: true, username: true, image: true } },
-            _count: { select: { likes: true, reposts: true } },
+            _count: { select: { likes: true, reposts: true, replies: true } },
           },
         },
       },

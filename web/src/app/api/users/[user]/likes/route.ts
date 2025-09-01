@@ -41,7 +41,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ user
       orderBy: { createdAt: "desc" },
       skip: offset,
       take: limit,
-      include: { echo: { include: { author: { select: { name: true, username: true, image: true } }, _count: { select: { likes: true, reposts: true } }, original: { include: { author: { select: { name: true, username: true, image: true } }, _count: { select: { likes: true, reposts: true } } } } } } },
+      include: { echo: { include: { author: { select: { name: true, username: true, image: true } }, _count: { select: { likes: true, reposts: true, replies: true } }, original: { include: { author: { select: { name: true, username: true, image: true } }, _count: { select: { likes: true, reposts: true, replies: true } } } } } } },
     });
     const rows = likes
       .filter((l) => !l.echo.originalId)
@@ -56,6 +56,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ user
           text: display.text,
           likes: display._count?.likes ?? 0,
           reposts: display._count?.reposts ?? 0,
+          replies: display._count?.replies ?? 0,
           liked: true,
           reposted: false,
           avatarUrl: display.author?.image || undefined,

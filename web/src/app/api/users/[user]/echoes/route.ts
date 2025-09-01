@@ -43,11 +43,11 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ user
       ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
       include: {
         author: { select: { name: true, username: true, image: true } },
-        _count: { select: { likes: true, reposts: true } },
+        _count: { select: { likes: true, reposts: true, replies: true } },
         original: {
           include: {
             author: { select: { name: true, username: true, image: true } },
-            _count: { select: { likes: true, reposts: true } },
+            _count: { select: { likes: true, reposts: true, replies: true } },
           },
         },
       },
@@ -75,6 +75,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ user
           text: display.text,
           likes: display._count?.likes ?? 0,
           reposts: display._count?.reposts ?? 0,
+          replies: display._count?.replies ?? 0,
           liked: likedSet.has(t.originalId || t.id),
           reposted: repostedSet.has(t.originalId || t.id),
           avatarUrl: display.author?.image || undefined,

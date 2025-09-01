@@ -253,6 +253,7 @@ export type Echo = {
   text: string;
   likes: number;
   reposts: number;
+  replies?: number;
   liked?: boolean;
   reposted?: boolean;
   avatarUrl?: string;
@@ -331,7 +332,7 @@ function EchoItem({
         <div className="mt-3 flex items-center gap-6 text-black/60 dark:text-white/60 text-sm">
           <button type="button" onClick={() => onReply?.(t.id)} className="inline-flex items-center gap-2 hover:text-sky-500">
             <ReplyIcon className="w-5 h-5 rotate-180" />
-            <span className="sr-only">Reply</span>
+            {typeof t.replies === "number" && t.replies > 0 ? <span>{t.replies}</span> : <span className="sr-only">Reply</span>}
           </button>
           <button
             type="button"

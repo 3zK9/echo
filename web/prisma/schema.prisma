@@ -78,11 +78,17 @@ model Echo {@@map("Tweet")
   original   Echo?   @relation("ReEchoes", fields: [originalId], references: [id])
   reposts   Echo[]  @relation("ReEchoes")
 
+  // Replies: an echo can optionally be a reply to another echo
+  replyToId String?
+  replyTo   Echo?   @relation("Replies", fields: [replyToId], references: [id])
+  replies   Echo[]  @relation("Replies")
+
   likes      EchoLike[]
 
   @@index([authorId, createdAt])
   @@index([createdAt])
   @@index([originalId])
+  @@index([replyToId])
 }
 
 model EchoLike {@@map("Like")
