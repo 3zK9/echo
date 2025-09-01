@@ -43,11 +43,11 @@ export default function ProfileView({
     <>
       <ProfileHeader username={username} displayName={displayName} avatar={avatar} canEdit={canEdit} initialBio={initialBio} initialLink={initialLink} />
 
-      <div className="sticky top-[53px] z-10 panel">
+      <div className="sticky top-[53px] z-10 bg-white/70 dark:bg-black/50 backdrop-blur border-b border-black/10 dark:border-white/10">
         <div className="flex">
           <button
             onClick={() => updateTab("echoes")}
-            className={`flex-1 text-center px-4 py-3 font-semibold hover:bg-white/10 ${
+            className={`flex-1 text-center px-4 py-3 font-semibold hover:bg-black/5 dark:hover:bg-white/10 ${
               tab === "echoes" ? "border-b-2 border-sky-500" : ""
             }`}
           >
@@ -55,7 +55,7 @@ export default function ProfileView({
           </button>
           <button
             onClick={() => updateTab("likes")}
-            className={`flex-1 text-center px-4 py-3 font-semibold hover:bg-white/10 ${
+            className={`flex-1 text-center px-4 py-3 font-semibold hover:bg-black/5 dark:hover:bg-white/10 ${
               tab === "likes" ? "border-b-2 border-sky-500" : ""
             }`}
           >
@@ -63,7 +63,7 @@ export default function ProfileView({
           </button>
           <button
             onClick={() => updateTab("replies")}
-            className={`flex-1 text-center px-4 py-3 font-semibold hover:bg-white/10 ${
+            className={`flex-1 text-center px-4 py-3 font-semibold hover:bg-black/5 dark:hover:bg-white/10 ${
               tab === "replies" ? "border-b-2 border-sky-500" : ""
             }`}
           >
@@ -72,7 +72,7 @@ export default function ProfileView({
         </div>
       </div>
 
-      <header className="px-4 py-3 text-xl font-bold sticky top-[109px] z-10 panel">{tab === "echoes" ? "Echoes" : tab === "likes" ? "Likes" : "Replies"}</header>
+      <header className="px-4 py-3 text-xl font-bold sticky top-[109px] z-10 bg-white/70 dark:bg-black/50 backdrop-blur border-b border-black/10 dark:border-white/10">{tab === "echoes" ? "Echoes" : tab === "likes" ? "Likes" : "Replies"}</header>
       <ProfileFeed key={`${username}:${tab}`} username={username} tab={tab} />
     </>
   );

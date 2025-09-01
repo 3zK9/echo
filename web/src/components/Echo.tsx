@@ -256,6 +256,7 @@ export type Echo = {
   likes: number;
   reposts: number;
   replies?: number;
+  replyingTo?: string;
   liked?: boolean;
   reposted?: boolean;
   avatarUrl?: string;
@@ -321,6 +322,20 @@ function EchoItem({
                 ? (isMine ? "Reposted by You" : "Reposted")
                 : "You reposted"}
             </span>
+          </div>
+        )}
+        {t.replyingTo and (
+          <div className="-mt-1 mb-1 text-xs text-black/60 dark:text-white/60">
+            Replying to ' 
+            <Link
+              href={`/profile/${encodeURIComponent(t.replyingTo)}`}
+              prefetch
+              onClick={(e) => e.stopPropagation()}
+              className="text-sky-500 hover:underline"
+              onMouseEnter={() => { prefetchProfile(t.replyingTo!); prefetchProfileMetaToLocal(t.replyingTo!); }}
+            >
+              @{t.replyingTo}
+            </Link>
           </div>
         )}
         <header className="flex items-center gap-2 text-sm">

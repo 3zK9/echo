@@ -112,7 +112,7 @@ export default function ProfileHeader({
   }, [username]);
 
   return (
-    <div className="px-4 py-3 sticky top-0 panel-soft">
+    <div className="px-4 py-3 sticky top-0 backdrop-blur bg-white/70 dark:bg-black/50 border-b border-black/10 dark:border-white/10">
       <div className="flex items-start gap-3">
         <Image src={avatar} alt="avatar" width={48} height={48} className="rounded-full" priority sizes="48px" />
         <div className="min-w-0 flex-1">

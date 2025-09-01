@@ -44,6 +44,11 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ user
       include: {
         author: { select: { name: true, username: true, image: true } },
         _count: { select: { likes: true, reposts: true, replies: true } },
+        replyTo: {
+          include: {
+            author: { select: { username: true, name: true } },
+          },
+        },
       },
     });
     const likedSet = new Set<string>();
@@ -62,6 +67,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ user
       likes: (t as any)._count?.likes ?? 0,
       reposts: (t as any)._count?.reposts ?? 0,
       replies: (t as any)._count?.replies ?? 0,
+      replyingTo: (t.replyTo?.author?.username || sanitizeHandle(t.replyTo?.author?.name || undefined)) || undefined,
       liked: likedSet.has(t.id),
       reposted: false,
       avatarUrl: t.author?.image || undefined,

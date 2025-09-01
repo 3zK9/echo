@@ -69,7 +69,7 @@ export default function EchoThread({ echoId }: { echoId: string }) {
   if (!head) return <EchoSkeletonList count={3} />;
   return (
     <div>
-      <header className="px-4 py-3 text-xl font-bold sticky top-0 z-10 panel-soft">Echo</header>
+      <header className="px-4 py-3 text-xl font-bold sticky top-0 z-10 bg-white/70 dark:bg-black/50 backdrop-blur border-b border-black/10 dark:border-white/10">Echo</header>
       <div className="panel mt-4 overflow-hidden">
         <EchoItem t={head} />
         <div className="px-4 py-3 border-t border-white/10">

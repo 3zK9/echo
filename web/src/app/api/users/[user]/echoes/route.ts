@@ -37,7 +37,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ user
     const cursor = url.searchParams.get("cursor") || undefined;
 
     const echoes = await prisma.echo.findMany({
-      where: { authorId: u.id },
+      where: { authorId: u.id, replyToId: null },
       orderBy: { id: "desc" },
       take: limit + 1,
       ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
