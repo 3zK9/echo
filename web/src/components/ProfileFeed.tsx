@@ -50,6 +50,26 @@ export default function ProfileFeed({ username, tab, initialEchoes, initialLikes
     { revalidateFirstPage: false, parallel: true, initialSize: 1, fallbackData: likesFallback }
   );
 
+  // Replies SWR (cursor-based)
+  const repliesFallback = initialReplies ? [{ items: initialReplies, nextCursor: initialRepliesCursor ?? null }] : undefined;
+  const { data: rdata, size: rsize, setSize: rsetSize, isValidating: rvalid } = useSWRInfinite(
+    (index, prev) => {
+      if (index === 0) return keys.profileReplies(username, null, LIMIT);
+      if (prev && prev.nextCursor === null) return null;
+      const cursor = prev?.nextCursor ?? null;
+      return keys.profileReplies(username, cursor, LIMIT);
+    },
+    async ([, uname, cursor, limit]) => {
+      const params = new URLSearchParams();
+      params.set("limit", String(limit));
+      if (cursor) params.set("cursor", String(cursor));
+      const res = await fetch(`/api/users/${encodeURIComponent(String(uname))}/replies?${params.toString()}`, { cache: "no-store" });
+      if (!res.ok) throw new Error("fetch_replies_failed");
+      return res.json();
+    },
+    { revalidateFirstPage: false, parallel: true, initialSize: 1, fallbackData: repliesFallback }
+  );
+
   const echoItems = edata ? edata.flatMap((p: any) => p.items as Echo[]) : [];
   const likeItems = ldata ? ldata.flatMap((p: any) => p.items as Echo[]) : [];
   const activeItemsRaw = tab === "echoes" ? echoItems : (tab === "likes" ? likeItems : (rdata ? rdata.flatMap((p: any) => p.items as Echo[]) : []));
@@ -82,7 +102,7 @@ export default function ProfileFeed({ username, tab, initialEchoes, initialLikes
       else { esetSize(1); lsetSize(1); }
     });
     return () => cancelAnimationFrame(id);
-  }, [username, tab, lsetSize, esetSize]);
+  }, [username, tab, lsetSize, esetSize, rsetSize]);
 
   // Infinite scroll sentinel
   useEffect(() => {

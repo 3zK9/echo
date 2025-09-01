@@ -30,7 +30,7 @@ export default function ProfileView({
     if (t === "likes" || t === "echoes" || t === "replies") setTab(t as any);
   }, []);
 
-  const updateTab = (t: "echoes" | "likes") => {
+  const updateTab = (t: "echoes" | "likes" | "replies") => {
     setTab(t);
     const sp = new URLSearchParams(window.location.search);
     sp.set("tab", t);
