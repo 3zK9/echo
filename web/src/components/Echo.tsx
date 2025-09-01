@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useRef } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
@@ -147,11 +147,10 @@ function renderMarkdownWithCode(input: string): React.ReactNode[] {
       break;
     }
     const body = input.slice(bodyStart, end).replace(/\n$/, "");
-    const codeHtml = highlight(body, lang);
     const cls = `language-${(lang || "").toLowerCase() || "javascript"}`;
     out.push(
       <pre className={`code-block ${cls}`} key={`code-${start}`}>
-        <code className={cls} dangerouslySetInnerHTML={{ __html: codeHtml }} />
+        <code className={cls}>{body}</code>
       </pre>
     );
     i = end + 3;
@@ -256,6 +255,10 @@ function EchoItem({
   const isMine = t.canDelete || (session?.user?.username && t.handle === session.user.username);
 
   const renderText = (input: string) => renderMarkdownWithCode(input);
+  const contentRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (contentRef.current) Prism.highlightAllUnder(contentRef.current);
+  }, [t.text]);
   return (
     <article id={`t-${t.id}`} className="flex gap-3 px-4 py-4 border-b border-white/10 hover:bg-white/5 transition">
       <div className="shrink-0">
@@ -294,7 +297,7 @@ function EchoItem({
             </Link> · {t.time}
           </span>
         </header>
-        <div className="mt-1 space-y-2">{renderText(t.text)}</div>
+        <div className="mt-1 space-y-2" ref={contentRef}>{renderText(t.text)}</div>
         <div className="mt-3 flex items-center gap-6 text-black/60 dark:text-white/60 text-sm">
           <button type="button" onClick={() => onReply?.(t.id)} className="inline-flex items-center gap-2 hover:text-sky-500">
             <ReplyIcon className="w-5 h-5 rotate-180" />
