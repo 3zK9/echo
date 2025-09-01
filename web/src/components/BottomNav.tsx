@@ -19,11 +19,13 @@ export default function BottomNav() {
     if (typeof window !== "undefined") {
       try {
         const { pathname } = window.location;
-        const m = pathname.match(/^\/profile\/([^\/?#]+)/);
-        if (m && m[1]) {
-          const mention = m[1];
-          window.location.href = `/?mention=${encodeURIComponent(mention)}#compose`;
-          return;
+        if (pathname.startsWith('/profile')) {
+          const m = pathname.match(/^\/profile\/([^\/?#]+)/);
+          const handle = (m && m[1]) ? m[1] : (username || '');
+          if (handle) {
+            window.location.href = `/?mention=${encodeURIComponent(handle)}#compose`;
+            return;
+          }
         }
         if (pathname !== "/") {
           window.location.href = "/#compose";
