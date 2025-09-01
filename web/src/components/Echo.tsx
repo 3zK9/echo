@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { ReplyIcon, RetweetIcon, HeartIcon, UploadIcon, TrashIcon } from "@/components/icons";
 import { prefetchProfile, prefetchProfileMetaToLocal } from "@/lib/prefetch";
-import Prism from "prismjs";
+import * as PrismNS from "prismjs";
 // Core/common
 import "prismjs/components/prism-clike";
 import "prismjs/components/prism-markup"; // html/xml/svg
@@ -47,6 +47,8 @@ import "prismjs/components/prism-dart";
 import "prismjs/components/prism-lua";
 import "prismjs/components/prism-powershell";
 import "prismjs/components/prism-shell-session";
+
+const PrismLib: any = (PrismNS as any).default || PrismNS;
 
 function highlight(code: string, lang?: string): string {
   const l = (lang || "").toLowerCase();
@@ -90,9 +92,9 @@ function highlight(code: string, lang?: string): string {
     swift: "swift",
   };
   const alias = map[l] || "javascript";
-  const grammar = (Prism.languages as any)[alias] || Prism.languages.javascript;
+  const grammar = (PrismLib.languages as any)[alias] || PrismLib.languages.javascript;
   try {
-    const html = Prism.highlight(code, grammar, alias);
+    const html = PrismLib.highlight(code, grammar, alias);
     if (html && html.includes("token")) return html;
   } catch {
     // fallthrough to basic fallback
@@ -257,7 +259,18 @@ function EchoItem({
   const renderText = (input: string) => renderMarkdownWithCode(input);
   const contentRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
-    if (contentRef.current) Prism.highlightAllUnder(contentRef.current);
+    const root = contentRef.current;
+    if (!root) return;
+    try {
+      if (typeof PrismLib.highlightAllUnder === "function") {
+        PrismLib.highlightAllUnder(root);
+      } else {
+        const nodes = root.querySelectorAll('code[class*="language-"]');
+        nodes.forEach((n) => {
+          try { PrismLib.highlightElement(n); } catch {}
+        });
+      }
+    } catch {}
   }, [t.text]);
   return (
     <article id={`t-${t.id}`} className="flex gap-3 px-4 py-4 border-b border-white/10 hover:bg-white/5 transition">
