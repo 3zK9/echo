@@ -49,7 +49,7 @@ model User {
 
   // App-specific
   username       String?    @unique
-  tweets         Echo[]
+  echoes         Echo[]
   likes          EchoLike[]
   profile        Profile?
 
@@ -66,7 +66,7 @@ model VerificationToken {
 }
 
 // App models
-model Echo {@@map("Tweet")
+model Echo {
   id         String   @id @default(cuid())
   authorId   String
   author     User     @relation(fields: [authorId], references: [id], onDelete: Cascade)

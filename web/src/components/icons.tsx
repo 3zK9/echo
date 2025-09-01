@@ -18,7 +18,7 @@ export const ReplyIcon = (props: React.SVGProps<SVGSVGElement>) => (
   </svg>
 );
 
-export const RetweetIcon = (props: React.SVGProps<SVGSVGElement>) => (
+export const RepostIcon = (props: React.SVGProps<SVGSVGElement>) => (
   <svg viewBox="0 0 24 24" fill="none" strokeWidth="1.5" stroke="currentColor" aria-hidden="true" {...props}>
     <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 7.5H15a3 3 0 013 3v6m0 0l2.25-2.25M18 16.5l-2.25 2.25M16.5 16.5H9a3 3 0 01-3-3v-6m0 0L3.75 9.75M6 7.5l2.25-2.25" />
   </svg>

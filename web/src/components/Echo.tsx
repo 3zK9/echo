@@ -4,7 +4,7 @@ import React, { useEffect, useRef } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
-import { ReplyIcon, RetweetIcon, HeartIcon, UploadIcon, TrashIcon } from "@/components/icons";
+import { ReplyIcon, RepostIcon, HeartIcon, UploadIcon, TrashIcon } from "@/components/icons";
 import { prefetchProfile, prefetchProfileMetaToLocal } from "@/lib/prefetch";
 import * as PrismNS from "prismjs";
 // Core/common
@@ -307,7 +307,7 @@ function EchoItem({
       <div className="flex-1 min-w-0">
         {(t.isRepost || repostedByMe) && (
           <div className="-mt-1 mb-1 flex items-center gap-2 text-xs text-green-600 dark:text-green-400">
-            <RetweetIcon className="w-4 h-4" />
+            <RepostIcon className="w-4 h-4" />
             <span>
               {t.isRepost
                 ? (isMine ? "Reposted by You" : "Reposted")
@@ -340,7 +340,7 @@ function EchoItem({
             className={`inline-flex items-center gap-2 hover:text-green-500 ${repostedByMe ? "text-green-600" : ""}`}
             aria-pressed={!!repostedByMe}
           >
-            <RetweetIcon className="w-5 h-5" />
+            <RepostIcon className="w-5 h-5" />
             {repostsCount && repostsCount > 0 ? repostsCount : ""}
           </button>
           <button
