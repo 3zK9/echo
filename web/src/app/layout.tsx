@@ -4,6 +4,8 @@ import "./globals.css";
 import "prismjs/themes/prism-tomorrow.css";
 import Providers from "@/components/Providers";
 import BottomNav from "@/components/BottomNav";
+import { Analytics } from "@vercel/analytics/react";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -33,6 +35,9 @@ export default function RootLayout({
           {/* Mobile spacer to avoid content under bottom nav */}
           <div className="h-16 md:hidden" aria-hidden="true" />
           <BottomNav />
+          {/* Vercel Web Analytics & Speed Insights */}
+          <Analytics />
+          <SpeedInsights />
         </Providers>
       </body>
     </html>
