@@ -17,8 +17,17 @@ export default function BottomNav() {
 
   const onCompose = () => {
     if (typeof window !== "undefined") {
-      window.location.hash = "compose";
-      // Some pages listen for #compose to focus the textarea
+      try {
+        const { pathname, search } = window.location;
+        if (pathname !== "/") {
+          const qs = search && search.length > 0 ? search : "";
+          window.location.href = `/${qs}#compose`;
+        } else {
+          window.location.hash = "compose";
+        }
+      } catch {
+        window.location.href = "/#compose";
+      }
     }
   };
 
