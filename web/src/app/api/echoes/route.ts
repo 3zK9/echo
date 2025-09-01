@@ -75,7 +75,7 @@ export async function GET(req: Request) {
       .map((t) => mapEchoRow(t, likedSet, repostedSet, meId));
     const nextCursor = hasMore ? echoes[limit].id : null;
     return NextResponse.json({ items, nextCursor }, { headers: { "Cache-Control": "private, max-age=10" } });
-  } catch (_e) {
+  } catch {
     return NextResponse.json({ items: [], nextCursor: null }, { headers: { "Cache-Control": "private, max-age=5", "x-db-error": "unreachable" } });
   }
 }
@@ -91,7 +91,7 @@ export async function POST(req: Request) {
     const withAuthor = await prisma.echo.findUnique({ where: { id: created.id }, include: { author: { select: { name: true, username: true, image: true } } } });
     const row = mapEchoRow({ ...withAuthor, _count: { likes: 0, reposts: 0 } }, new Set(), new Set(), userId);
     return NextResponse.json(row, { status: 201 });
-  } catch (_e) {
+  } catch {
     return NextResponse.json({ error: "db_unreachable" }, { status: 503 });
   }
 }

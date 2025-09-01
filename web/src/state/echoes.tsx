@@ -147,7 +147,7 @@ export function EchoesProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const removeRepost: EchoesContextType["removeRepost"] = async (originalId, handle) => {
+  const removeRepost: EchoesContextType["removeRepost"] = useCallback(async (originalId, handle) => {
     // Optimistically remove my repost item and update counts
     setEchoes((prev) => prev.filter((t) => !(t.originalId === originalId && t.handle === handle)).map((t) => (t.id === originalId ? { ...t, reposted: false, reposts: Math.max(0, (t.reposts || 0) - 1) } : t)));
     try {
@@ -159,11 +159,11 @@ export function EchoesProvider({ children }: { children: React.ReactNode }) {
       // rollback: can't reconstruct removed temp repost reliably; refresh feed
       refresh();
     }
-  };
+  }, [refresh]);
 
-  const hasRepostBy: EchoesContextType["hasRepostBy"] = (originalId, handle) => {
+  const hasRepostBy: EchoesContextType["hasRepostBy"] = useCallback((originalId, handle) => {
     return echoes.some((t) => t.originalId === originalId && t.handle === handle);
-  };
+  }, [echoes]);
 
   const incReposts: EchoesContextType["incReposts"] = async () => {};
 

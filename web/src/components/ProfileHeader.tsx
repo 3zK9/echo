@@ -35,7 +35,6 @@ export default function ProfileHeader({
   const [editingLink, setEditingLink] = useState(false);
   const [linkDraft, setLinkDraft] = useState<string>((initialLink ?? getLink(username)) || "");
   const link = (initialLink ?? getLink(username)) || null;
-  const hasLocal = !!(getBio(username) || getLink(username));
 
   const onSave = async () => {
     const trimmed = draft.trim();

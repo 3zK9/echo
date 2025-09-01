@@ -66,7 +66,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ user
       });
     const nextOffset = rows.length === limit ? offset + limit : null;
     return NextResponse.json({ items: rows, nextOffset }, { headers: { "Cache-Control": "private, max-age=15" } });
-  } catch (_e) {
+  } catch {
     return NextResponse.json({ items: [], nextOffset: null }, { headers: { "Cache-Control": "private, max-age=5", "x-db-error": "unreachable" } });
   }
 }

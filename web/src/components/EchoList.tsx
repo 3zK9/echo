@@ -119,7 +119,7 @@ export default function EchoList({ items, username }: { items: Echo[]; username?
     } catch {}
   };
 
-  const onReply = (id: string) => {
+  const onReply = () => {
     if (typeof window !== "undefined") {
       window.location.href = `/#compose`;
     }
@@ -163,7 +163,7 @@ export default function EchoList({ items, username }: { items: Echo[]; username?
             onLike={() => toggleLike(t.id)}
             onRepost={() => toggleRepost(t.id)}
             onShare={() => onShare(t.id)}
-            onReply={() => onReply(t.id)}
+            onReply={() => onReply()}
             repostedByMe={repostedByMe}
             likesCount={t.likes}
             repostsCount={t.reposts}

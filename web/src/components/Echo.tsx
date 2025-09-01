@@ -104,7 +104,7 @@ function highlight(code: string, lang?: string): string {
     src = src
       .replace(/(#.*)$/gm, '<span class="tok-cmt">$1<\/span>')
       .replace(/\b(def|class|if|elif|else|for|while|try|except|finally|raise|return|with|lambda|yield|pass|break|continue|and|or|not|in|is|import|from|as)\b/g, '<span class="tok-kw">$1<\/span>')
-      .replace(/([\'\"][^\1]*?\1)/g, '<span class="tok-str">$1<\/span>')
+      .replace(/(['"])((?:\\.|(?!\1).)*)\1/g, '<span class="tok-str">$&<\/span>')
       .replace(/\b(True|False|None)\b/g, '<span class="tok-lit">$1<\/span>')
       .replace(/\b\d+(?:\.\d+)?\b/g, '<span class="tok-num">$&<\/span>');
     return src;
