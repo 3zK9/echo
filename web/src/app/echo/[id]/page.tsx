@@ -14,7 +14,7 @@ export default async function EchoPage({ params }: { params: Promise<{ id: strin
   }
   // Normalize to root echo: if the id is a reply, follow the chain up to the top-level echo
   try {
-    let current = await prisma.echo.findUnique({ where: { id: p.id }, select: { id: true, replyToId: true } });
+    const current = await prisma.echo.findUnique({ where: { id: p.id }, select: { id: true, replyToId: true } });
     if (current) {
       let rootId: string = current.id;
       let cur: string | null = current.replyToId as string | null;
