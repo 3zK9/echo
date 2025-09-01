@@ -18,10 +18,15 @@ export default function BottomNav() {
   const onCompose = () => {
     if (typeof window !== "undefined") {
       try {
-        const { pathname, search } = window.location;
+        const { pathname } = window.location;
+        const m = pathname.match(/^\/profile\/([^\/?#]+)/);
+        if (m && m[1]) {
+          const mention = m[1];
+          window.location.href = `/?mention=${encodeURIComponent(mention)}#compose`;
+          return;
+        }
         if (pathname !== "/") {
-          const qs = search && search.length > 0 ? search : "";
-          window.location.href = `/${qs}#compose`;
+          window.location.href = "/#compose";
         } else {
           window.location.hash = "compose";
         }

@@ -18,6 +18,20 @@ export default function Compose({ onPost, initialText = "" }: { onPost?: (text: 
     }
   }, []);
 
+  // If Home is opened with ?mention=username#compose, prefill with @username
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const u = new URL(window.location.href);
+      const mention = u.searchParams.get("mention");
+      if (mention && !initialText && text.trim().length === 0) {
+        const pre = `@${mention} `;
+        setText(pre.slice(0, MAX_LEN));
+        inputRef.current?.focus();
+      }
+    } catch {}
+  }, []);
+
   useEffect(() => {
     const next = initialText.slice(0, MAX_LEN);
     setText(next);
