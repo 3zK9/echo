@@ -324,9 +324,9 @@ function EchoItem({
             </span>
           </div>
         )}
-        {t.replyingTo and (
+        {t.replyingTo && (
           <div className="-mt-1 mb-1 text-xs text-black/60 dark:text-white/60">
-            Replying to ' 
+            Replying to{' '}
             <Link
               href={`/profile/${encodeURIComponent(t.replyingTo)}`}
               prefetch
