@@ -71,3 +71,35 @@ body {
 .code-block .token.important,
 .code-block .token.variable { color: #FDE68A; }
 .code-block .token.deleted { color: #FCA5A5; }
+
+/* Also apply token colors globally in case code isn't wrapped */
+.token.comment,
+.token.prolog,
+.token.doctype,
+.token.cdata { color: #9CA3AF; }
+.token.punctuation { color: #E5E7EB; }
+.token.property,
+.token.tag,
+.token.boolean,
+.token.number,
+.token.constant,
+.token.symbol { color: #FCA5A5; }
+.token.selector,
+.token.attr-name,
+.token.string,
+.token.char,
+.token.builtin,
+.token.inserted { color: #86EFAC; }
+.token.operator,
+.token.entity,
+.language-css .token.string,
+.style .token.string { color: #E5E7EB; }
+.token.atrule,
+.token.attr-value,
+.token.keyword { color: #93C5FD; }
+.token.function,
+.token.class-name { color: #C4B5FD; }
+.token.regex,
+.token.important,
+.token.variable { color: #FDE68A; }
+.token.deleted { color: #FCA5A5; }

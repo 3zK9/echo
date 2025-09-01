@@ -92,13 +92,32 @@ function highlight(code: string, lang?: string): string {
   const alias = map[l] || "javascript";
   const grammar = (Prism.languages as any)[alias] || Prism.languages.javascript;
   try {
-    return Prism.highlight(code, grammar, alias);
+    const html = Prism.highlight(code, grammar, alias);
+    if (html && html.includes("token")) return html;
   } catch {
-    return code
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;");
+    // fallthrough to basic fallback
   }
+  // Fallback minimal highlighter (very lightweight)
+  const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  let src = esc(code);
+  if (alias === 'python') {
+    src = src
+      .replace(/(#.*)$/gm, '<span class="tok-cmt">$1<\/span>')
+      .replace(/\b(def|class|if|elif|else|for|while|try|except|finally|raise|return|with|lambda|yield|pass|break|continue|and|or|not|in|is|import|from|as)\b/g, '<span class="tok-kw">$1<\/span>')
+      .replace(/([\'\"][^\1]*?\1)/g, '<span class="tok-str">$1<\/span>')
+      .replace(/\b(True|False|None)\b/g, '<span class="tok-lit">$1<\/span>')
+      .replace(/\b\d+(?:\.\d+)?\b/g, '<span class="tok-num">$&<\/span>');
+    return src;
+  }
+  // default js-like
+  src = src
+    .replace(/\/(?:\*[^]*?\*\/|\/\/.*)/g, '<span class="tok-cmt">$&<\/span>')
+    .replace(/\b(import|export|from|as|if|else|for|while|do|switch|case|break|continue|try|catch|finally|throw|return|new|class|extends|super|this|function|const|let|var|typeof|instanceof|in|of|void|yield|async|await|delete)\b/g, '<span class="tok-kw">$1<\/span>')
+    .replace(/(['\"])((?:\\.|(?!\1).)*)\1/g, '<span class="tok-str">$&<\/span>')
+    .replace(/`(?:\\.|[^`])*`/g, '<span class="tok-str">$&<\/span>')
+    .replace(/\b(?:true|false|null|undefined|NaN|Infinity)\b/g, '<span class="tok-lit">$&<\/span>')
+    .replace(/0x[0-9a-fA-F]+|\b\d+(?:\.\d+)?\b/g, '<span class="tok-num">$&<\/span>');
+  return src;
 }
 
 function renderMarkdownWithCode(input: string): React.ReactNode[] {
