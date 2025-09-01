@@ -50,6 +50,36 @@ import "prismjs/components/prism-shell-session";
 
 const PrismLib: any = (PrismNS as any).default || PrismNS;
 
+// Register common aliases so DOM-based highlighting recognizes our tags
+const aliasMap: Record<string, string> = {
+  js: "javascript", jsx: "jsx",
+  ts: "typescript", tsx: "tsx",
+  yml: "yaml", md: "markdown",
+  html: "markup", xml: "markup", svg: "markup",
+  sh: "bash", zsh: "bash", shell: "bash",
+  py: "python", py3: "python", python3: "python",
+  rb: "ruby", pl: "perl", ml: "ocaml",
+  r: "r",
+  "c++": "cpp", "c#": "csharp", cs: "csharp",
+  objc: "objectivec", "objective-c": "objectivec", objectivec: "objectivec",
+  "obj-c": "objectivec", "obj-c++": "objectivec", "objective-c++": "objectivec", "objc++": "objectivec", mm: "objectivec",
+  octave: "matlab",
+  ps: "powershell", ps1: "powershell",
+  console: "shell-session",
+  kt: "kotlin",
+  rs: "rust",
+  sbt: "scala",
+};
+
+try {
+  const langs = PrismLib.languages as any;
+  Object.entries(aliasMap).forEach(([alias, base]) => {
+    const a = alias.toLowerCase();
+    const b = base.toLowerCase();
+    if (!langs[a] && langs[b]) langs[a] = langs[b];
+  });
+} catch {}
+
 function highlight(code: string, lang?: string): string {
   const l = (lang || "").toLowerCase();
   const map: Record<string, string> = {
