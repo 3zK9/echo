@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { initDevice, ensureSessionWithPeer, encryptForPeer, replenishIfNeeded, decryptFromPeer, resetAllSessions } from "@/lib/signal/client";
+import { initDevice, ensureSessionWithPeer, encryptForPeer, replenishIfNeeded, decryptFromPeer } from "@/lib/signal/client";
 
 type Message = {
   id: string;
@@ -19,6 +19,7 @@ export default function DMChat({ peer }: { peer: string }) {
   const [cursor, setCursor] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [plaintexts, setPlaintexts] = useState<Record<string, string>>({});
+  const [error, setError] = useState<string | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
 
   const fetchPage = useCallback(async (c: string | null) => {
@@ -33,10 +34,11 @@ export default function DMChat({ peer }: { peer: string }) {
   }, [peer]);
 
   useEffect(() => {
-    (async () => { try { await initDevice(); resetAllSessions(); await ensureSessionWithPeer(peer); } catch {} })();
+    (async () => { try { await initDevice(); await ensureSessionWithPeer(peer); } catch {} })();
     setMessages([]);
     setCursor(null);
     setPlaintexts({});
+    setError(null);
     fetchPage(null);
   }, [peer]);
 
@@ -70,7 +72,7 @@ export default function DMChat({ peer }: { peer: string }) {
     setLoading(true);
     try {
       await initDevice();
-      await ensureSessionWithPeer(peer);
+      // Try encryption with existing session; establish if needed inside helper
       const ciphertext = await encryptForPeer(peer, text);
       const deviceId = typeof window !== 'undefined' ? (localStorage.getItem('signal_device_id_v1') || 'web') : 'web';
       const res = await fetch(`/api/dm/messages`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ toUsername: peer, senderDeviceId: deviceId, ciphertext }) });
@@ -81,9 +83,16 @@ export default function DMChat({ peer }: { peer: string }) {
         setInput("");
         listRef.current?.scrollTo({ top: 0, behavior: "smooth" });
         replenishIfNeeded().catch(() => {});
+        setError(null);
       } else {
-        console.warn('Failed to send message', await res.text());
+        const t = await res.text().catch(() => '');
+        console.warn('Failed to send message', t);
+        setError("Failed to send message.");
       }
+    } catch (e: any) {
+      const msg = String(e?.message || e || "");
+      if (msg.includes('no_bundle')) setError("The recipient is not ready for encrypted messages yet. Ask them to open the app once.");
+      else setError("Could not encrypt message. Please try again.");
     } finally { setLoading(false); }
   };
 
@@ -107,6 +116,7 @@ export default function DMChat({ peer }: { peer: string }) {
         <input value={input} onChange={(e) => setInput(e.target.value)} className="flex-1 rounded-md bg-black/20 border border-white/10 p-2 outline-none" placeholder="Write a message..." />
         <button onClick={onSend} className="btn-primary px-4 py-2" disabled={loading || !input.trim()}>Send</button>
       </div>
+      {error && <div className="mt-2 text-xs text-red-400">{error}</div>}
       <div className="mt-2 text-xs text-white/50">End‑to‑end encryption powered by Signal sessions on your device.</div>
     </div>
   );

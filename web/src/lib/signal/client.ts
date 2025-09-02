@@ -100,16 +100,24 @@ export async function ensureSessionWithPeer(username: string) {
 }
 
 export async function encryptForPeer(username: string, plaintext: string) {
-  // Use bundle to establish/refresh a session before encrypt
-  const info = await (await fetch(`/api/dm/users/${encodeURIComponent(username)}/bundle`)).json();
-  const address = new signal.SignalProtocolAddress(String(info.userId), 1);
+  // Try existing session first using identity address; if missing, establish via bundle and retry
+  const ident = await (await fetch(`/api/dm/users/${encodeURIComponent(username)}/identity`)).json();
+  const address = new signal.SignalProtocolAddress(String(ident.userId), 1);
   const cipher = new signal.SessionCipher(createStore() as any, address);
   const plainBuf = new TextEncoder().encode(plaintext).buffer as ArrayBuffer;
-  const res: any = await cipher.encrypt(plainBuf);
-  // libsignal exposes .type and either .serialize() or .body
-  const type: number = typeof res?.type === 'number' ? res.type : 1;
-  const buf: ArrayBuffer = typeof res?.serialize === 'function' ? res.serialize() : (res?.body as ArrayBuffer) || (res as ArrayBuffer);
-  return `${type}:${toB64(buf)}`;
+  async function doEncrypt() {
+    const res: any = await cipher.encrypt(plainBuf);
+    const type: number = typeof res?.type === 'number' ? res.type : 1;
+    const buf: ArrayBuffer = typeof res?.serialize === 'function' ? res.serialize() : (res?.body as ArrayBuffer) || (res as ArrayBuffer);
+    return `${type}:${toB64(buf)}`;
+  }
+  try {
+    return await doEncrypt();
+  } catch {
+    // Establish a session using one-time prekey
+    await ensureSessionWithPeer(username);
+    return await doEncrypt();
+  }
 }
 
 export async function decryptFromPeer(username: string, payload: string) {

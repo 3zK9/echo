@@ -11,6 +11,7 @@ import { useSession } from "next-auth/react";
 import { mutate } from "swr";
 import { keys } from "@/lib/keys";
 import { useProfile } from "@/state/profile";
+import { initDevice, replenishIfNeeded } from "@/lib/signal/client";
 
 function BackgroundPrefetch() {
   const { data: session } = useSession();
@@ -46,12 +47,22 @@ function PrefetchProfileMeta() {
 }
 
 export default function Providers({ children }: { children: React.ReactNode }) {
+  function SignalBootstrap() {
+    const { data: session } = useSession();
+    useEffect(() => {
+      if (!session?.user) return;
+      // Best-effort device init on app load for current user
+      initDevice().then(() => replenishIfNeeded().catch(() => {})).catch(() => {});
+    }, [session?.user]);
+    return null;
+  }
   return (
     <SessionProvider>
       <ProfileProvider>
         <ToastProvider>
           <SWRConfig value={swrConfig}>
             <ConfirmProvider>
+              <SignalBootstrap />
               <BackgroundPrefetch />
               <PrefetchProfileMeta />
               {children}
