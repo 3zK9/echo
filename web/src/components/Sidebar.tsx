@@ -40,14 +40,15 @@ export default function Sidebar() {
             <span className="text-lg font-semibold">Profile</span>
           </Link>
           <div
-            className="flex items-center gap-3 px-4 py-3 rounded-full opacity-50 cursor-not-allowed select-none"
+            className="flex items-center gap-3 px-4 py-3 rounded-full opacity-60 cursor-not-allowed select-none"
             title="Coming soon"
             aria-disabled="true"
           >
             <span className="text-xl" aria-hidden>
               <MessageIcon className="w-6 h-6" />
             </span>
-            <span className="text-lg font-semibold">Messages (coming soon)</span>
+            <span className="text-lg font-semibold">Messages</span>
+            <span className="ml-2 px-1.5 py-0.5 text-[10px] leading-none rounded-full border border-white/20 text-white/70">soon</span>
           </div>
         </nav>
         <Link href="/#compose" className="mt-4 block text-center w-full btn-primary">Echo</Link>
