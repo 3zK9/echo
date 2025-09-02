@@ -62,3 +62,10 @@ export const LogoutIcon = (props: React.SVGProps<SVGSVGElement>) => (
     <path strokeLinecap="round" strokeLinejoin="round" d="M12 15l3-3m0 0l-3-3m3 3H3" />
   </svg>
 );
+
+export const MessageIcon = (props: React.SVGProps<SVGSVGElement>) => (
+  <svg viewBox="0 0 24 24" fill="none" strokeWidth="1.5" stroke="currentColor" aria-hidden="true" {...props}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a8.25 8.25 0 11-3.66-6.89l3.41-1.25a.75.75 0 01.99.86l-.84 3.21A8.22 8.22 0 0121 12z" />
+    <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h8M8 8.75h6" />
+  </svg>
+);

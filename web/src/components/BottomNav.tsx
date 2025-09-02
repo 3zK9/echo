@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
-import { HomeIcon, UserIcon, PlusIcon, LogoutIcon } from "@/components/icons";
+import { HomeIcon, UserIcon, PlusIcon, LogoutIcon, MessageIcon } from "@/components/icons";
 import { useConfirm } from "@/components/Confirm";
 
 export default function BottomNav() {
@@ -70,6 +70,18 @@ export default function BottomNav() {
             <PlusIcon className="w-6 h-6" />
           </button>
         )}
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            disabled
+            title="Coming soon"
+            className="p-2 rounded-full opacity-50 cursor-not-allowed flex items-center gap-1"
+            aria-label="Messages (coming soon)"
+          >
+            <MessageIcon className="w-7 h-7" />
+            <span className="text-xs">Coming soon</span>
+          </button>
+        </div>
         <div className="relative" ref={menuRef}>
           <button
             type="button"
