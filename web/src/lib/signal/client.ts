@@ -88,9 +88,10 @@ export async function encryptForPeer(username: string, plaintext: string) {
   const info = await (await fetch(`/api/dm/users/${encodeURIComponent(username)}/bundle`)).json();
   const address = new signal.SignalProtocolAddress(String(info.userId), 1);
   const cipher = new signal.SessionCipher(createStore() as any, address);
-  const res = await cipher.encrypt(new TextEncoder().encode(plaintext));
-  if ((res as any).type && (res as any).body) return `${(res as any).type}:${toB64((res as any).body)}`;
-  return `1:${toB64(res as unknown as ArrayBuffer)}`;
+  const plainBuf = new TextEncoder().encode(plaintext).buffer as ArrayBuffer;
+  const res = await cipher.encrypt(plainBuf);
+  if ((res as any)?.body) return toB64((res as any).body as ArrayBuffer);
+  return toB64(res as unknown as ArrayBuffer);
 }
 
 export async function decryptFromPeer(username: string, payload: string) {
