@@ -48,7 +48,8 @@ export default function DMChat({ peer }: { peer: string }) {
       await initDevice();
       await ensureSessionWithPeer(peer);
       const ciphertext = await encryptForPeer(peer, text);
-      const res = await fetch(`/api/dm/messages`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ toUsername: peer, senderDeviceId: "web", ciphertext }) });
+      const deviceId = typeof window !== 'undefined' ? (localStorage.getItem('signal_device_id_v1') || 'web') : 'web';
+      const res = await fetch(`/api/dm/messages`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ toUsername: peer, senderDeviceId: deviceId, ciphertext }) });
       if (res.ok) {
         setMessages([]);
         setCursor(null);
@@ -56,6 +57,8 @@ export default function DMChat({ peer }: { peer: string }) {
         setInput("");
         listRef.current?.scrollTo({ top: 0, behavior: "smooth" });
         replenishIfNeeded().catch(() => {});
+      } else {
+        console.warn('Failed to send message', await res.text());
       }
     } finally { setLoading(false); }
   };
@@ -83,5 +86,4 @@ export default function DMChat({ peer }: { peer: string }) {
     </div>
   );
 }
-
 
