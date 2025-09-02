@@ -100,24 +100,26 @@ export async function ensureSessionWithPeer(username: string) {
 }
 
 export async function encryptForPeer(username: string, plaintext: string) {
-  // Try existing session first using identity address; if missing, establish via bundle and retry
-  const ident = await (await fetch(`/api/dm/users/${encodeURIComponent(username)}/identity`)).json();
+  // Establish a session up front for reliability in MVP (single device)
+  try {
+    await ensureSessionWithPeer(username);
+  } catch (e) {
+    const msg = String((e as any)?.message || e || '');
+    if (msg.includes('no_bundle') || msg.includes('no_prekeys') || msg.includes('no_device')) {
+      throw new Error('peer_not_ready');
+    }
+    throw e;
+  }
+  const identRes = await fetch(`/api/dm/users/${encodeURIComponent(username)}/identity`);
+  if (!identRes.ok) throw new Error('peer_not_ready');
+  const ident = await identRes.json();
   const address = new signal.SignalProtocolAddress(String(ident.userId), 1);
   const cipher = new signal.SessionCipher(createStore() as any, address);
   const plainBuf = new TextEncoder().encode(plaintext).buffer as ArrayBuffer;
-  async function doEncrypt() {
-    const res: any = await cipher.encrypt(plainBuf);
-    const type: number = typeof res?.type === 'number' ? res.type : 1;
-    const buf: ArrayBuffer = typeof res?.serialize === 'function' ? res.serialize() : (res?.body as ArrayBuffer) || (res as ArrayBuffer);
-    return `${type}:${toB64(buf)}`;
-  }
-  try {
-    return await doEncrypt();
-  } catch {
-    // Establish a session using one-time prekey
-    await ensureSessionWithPeer(username);
-    return await doEncrypt();
-  }
+  const res: any = await cipher.encrypt(plainBuf);
+  const type: number = typeof res?.type === 'number' ? res.type : 1;
+  const buf: ArrayBuffer = typeof res?.serialize === 'function' ? res.serialize() : (res?.body as ArrayBuffer) || (res as ArrayBuffer);
+  return `${type}:${toB64(buf)}`;
 }
 
 export async function decryptFromPeer(username: string, payload: string) {

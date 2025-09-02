@@ -91,8 +91,12 @@ export default function DMChat({ peer }: { peer: string }) {
       }
     } catch (e: any) {
       const msg = String(e?.message || e || "");
-      if (msg.includes('no_bundle')) setError("The recipient is not ready for encrypted messages yet. Ask them to open the app once.");
-      else setError("Could not encrypt message. Please try again.");
+      if (msg.includes('peer_not_ready') || msg.includes('no_bundle')) {
+        setError("The recipient isn’t ready for encrypted messages yet. Ask them to open the app once.");
+      } else {
+        console.error('Encrypt/send error', e);
+        setError("Could not encrypt message. Please try again.");
+      }
     } finally { setLoading(false); }
   };
 
