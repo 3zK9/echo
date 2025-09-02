@@ -10,8 +10,29 @@ const LS = {
 type StoreMap = Record<string, string>;
 const getStore = (): StoreMap => { try { return JSON.parse(localStorage.getItem(LS.store) || '{}') as StoreMap; } catch { return {}; } };
 const setStore = (m: StoreMap) => localStorage.setItem(LS.store, JSON.stringify(m));
-const put = (k: string, v: string) => { const m = getStore(); m[k] = v; setStore(m); };
-const get = (k: string, d?: string) => { const m = getStore(); return Object.prototype.hasOwnProperty.call(m, k) ? m[k] : d; };
+const putRaw = (k: string, v: string) => { const m = getStore(); m[k] = v; setStore(m); };
+const getRaw = (k: string, d?: string) => { const m = getStore(); return Object.prototype.hasOwnProperty.call(m, k) ? m[k] : d; };
+
+function isArrayBufferLike(v: any): v is ArrayBuffer | ArrayBufferView {
+  return v instanceof ArrayBuffer || (typeof ArrayBuffer !== 'undefined' && ArrayBuffer.isView && ArrayBuffer.isView(v));
+}
+
+// Store helpers that preserve binary values using a b64: prefix
+const put = (k: string, v: any) => {
+  if (isArrayBufferLike(v)) {
+    const buf = v instanceof ArrayBuffer ? v : (v as ArrayBufferView).buffer;
+    putRaw(k, `b64:${toB64(buf)}`);
+    return;
+  }
+  if (typeof v === 'string') { putRaw(k, v); return; }
+  try { putRaw(k, JSON.stringify(v)); } catch { putRaw(k, String(v)); }
+};
+const get = (k: string, d?: any) => {
+  const raw = getRaw(k);
+  if (raw === undefined) return d;
+  if (typeof raw === 'string' && raw.startsWith('b64:')) return fromB64(raw.slice(4));
+  try { return JSON.parse(raw as string); } catch { return raw; }
+};
 const remove = (k: string) => { const m = getStore(); delete m[k]; setStore(m); };
 
 const toB64 = (buf: ArrayBuffer) => btoa(String.fromCharCode(...new Uint8Array(buf)));
@@ -28,20 +49,15 @@ function createStore() {
     getLocalRegistrationId: async () => { const raw = localStorage.getItem(LS.regId); if (!raw) throw new Error('no_registration'); return Number(raw); },
 
     // Session store API
-    loadSession: async (address: string) => {
-      const v = get(`session${address}`);
-      return v ? fromB64(v) : undefined;
-    },
-    storeSession: async (address: string, record: ArrayBuffer) => {
-      put(`session${address}`, toB64(record));
-    },
+    loadSession: async (address: string) => get(`session${address}`),
+    storeSession: async (address: string, record: ArrayBuffer) => { put(`session${address}`, record); },
     removeSession: async (address: string) => {
       remove(`session${address}`);
     },
 
     // PreKey store API
     loadPreKey: async (keyId: number) => {
-      const v = get(`25519KeypreKey${keyId}`);
+      const v = getRaw(`25519KeypreKey${keyId}`);
       if (!v) throw new Error('no_prekey');
       const j = JSON.parse(v);
       return { pubKey: fromB64(j.pubKey), privKey: fromB64(j.privKey) } as signal.KeyPairType;
@@ -55,7 +71,7 @@ function createStore() {
 
     // Signed PreKey store API
     loadSignedPreKey: async (keyId: number) => {
-      const v = get(`25519KeysignedKey${keyId}`);
+      const v = getRaw(`25519KeysignedKey${keyId}`);
       if (!v) throw new Error('no_signed_prekey');
       const j = JSON.parse(v);
       return { pubKey: fromB64(j.pubKey), privKey: fromB64(j.privKey) } as signal.KeyPairType;
@@ -67,10 +83,14 @@ function createStore() {
     // Identity (peer) trust and cache
     isTrustedIdentity: async (_id: any, _idKey: ArrayBuffer) => true,
     loadIdentity: async (id: any) => {
-      const v = get('identityKey_'+id);
+      const v = getRaw('identityKey_'+id);
       return v ? fromB64(v) : undefined;
     },
-    saveIdentity: async (id: any, key: ArrayBuffer) => { put('identityKey_'+id, toB64(key)); return true; },
+    loadIdentityKey: async (id: any) => {
+      const v = getRaw('identityKey_'+id);
+      return v ? fromB64(v) : undefined;
+    },
+    saveIdentity: async (id: any, key: ArrayBuffer) => { put('identityKey_'+id, key); return true; },
 
     // Generic passthrough helpers (not required by lib, but handy)
     put: (key: string, value: any) => { put(key, typeof value==='string'?value:JSON.stringify(value)); },
