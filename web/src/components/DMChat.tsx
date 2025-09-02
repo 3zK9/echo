@@ -29,7 +29,7 @@ export default function DMChat({ peer }: { peer: string }) {
     const data = await res.json();
     setMessages((prev) => [...prev, ...(data.items || [])]);
     setCursor(data.nextCursor);
-  };
+  }, [peer]);
 
   useEffect(() => {
     (async () => { try { await initDevice(); await ensureSessionWithPeer(peer); } catch {} })();
