@@ -3,7 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { useSession, signOut } from "next-auth/react";
-import { HomeIcon, UserIcon } from "@/components/icons";
+import { HomeIcon, UserIcon, MessageIcon } from "@/components/icons";
 import { prefetchProfile, prefetchProfileMetaToLocal } from "@/lib/prefetch";
 
 const NavItem = ({ label, href, icon }: { label: string; href: string; icon?: React.ReactNode }) => (
@@ -39,6 +39,16 @@ export default function Sidebar() {
             </span>
             <span className="text-lg font-semibold">Profile</span>
           </Link>
+          <div
+            className="flex items-center gap-3 px-4 py-3 rounded-full opacity-50 cursor-not-allowed select-none"
+            title="Coming soon"
+            aria-disabled="true"
+          >
+            <span className="text-xl" aria-hidden>
+              <MessageIcon className="w-6 h-6" />
+            </span>
+            <span className="text-lg font-semibold">Messages (coming soon)</span>
+          </div>
         </nav>
         <Link href="/#compose" className="mt-4 block text-center w-full btn-primary">Echo</Link>
         {user && (
