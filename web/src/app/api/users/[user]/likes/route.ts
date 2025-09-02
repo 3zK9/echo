@@ -46,9 +46,12 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ user
     // Determine which of these echoes are also liked by the current viewer
     const baseIds = likes.map((l) => l.echo.originalId || l.echo.id);
     const viewerLiked = new Set<string>();
+    const viewerReposted = new Set<string>();
     if (meId && baseIds.length) {
       const mine = await prisma.echoLike.findMany({ where: { userId: meId, echoId: { in: baseIds } }, select: { echoId: true } });
       mine.forEach((m) => viewerLiked.add(m.echoId));
+      const reposts = await prisma.echo.findMany({ where: { authorId: meId, originalId: { in: baseIds } }, select: { originalId: true } });
+      reposts.forEach((r) => { if (r.originalId) viewerReposted.add(r.originalId); });
     }
     const rows = likes
       .filter((l) => !l.echo.originalId)
@@ -66,7 +69,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ user
           reposts: display._count?.reposts ?? 0,
           replies: display._count?.replies ?? 0,
           liked: viewerLiked.has(baseId),
-          reposted: false,
+          reposted: viewerReposted.has(baseId),
           avatarUrl: display.author?.image || undefined,
           originalId: e.originalId || undefined,
           isRepost: !!e.originalId,
