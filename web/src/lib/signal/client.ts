@@ -13,15 +13,18 @@ const setStore = (m: StoreMap) => localStorage.setItem(LS.store, JSON.stringify(
 const putRaw = (k: string, v: string) => { const m = getStore(); m[k] = v; setStore(m); };
 const getRaw = (k: string, d?: string) => { const m = getStore(); return Object.prototype.hasOwnProperty.call(m, k) ? m[k] : d; };
 
-function isArrayBufferLike(v: any): v is ArrayBuffer | ArrayBufferView {
-  return v instanceof ArrayBuffer || (typeof ArrayBuffer !== 'undefined' && ArrayBuffer.isView && ArrayBuffer.isView(v));
+function isArrayBufferLike(v: any): v is ArrayBuffer | ArrayBufferView | ArrayBufferLike {
+  return (
+    (typeof ArrayBuffer !== 'undefined' && v instanceof ArrayBuffer) ||
+    (typeof ArrayBuffer !== 'undefined' && (ArrayBuffer as any).isView && (ArrayBuffer as any).isView(v)) ||
+    (v && typeof v === 'object' && typeof (v as any).byteLength === 'number')
+  );
 }
 
 // Store helpers that preserve binary values using a b64: prefix
 const put = (k: string, v: any) => {
   if (isArrayBufferLike(v)) {
-    const buf = v instanceof ArrayBuffer ? v : (v as ArrayBufferView).buffer;
-    putRaw(k, `b64:${toB64(buf)}`);
+    putRaw(k, `b64:${toB64(v as any)}`);
     return;
   }
   if (typeof v === 'string') { putRaw(k, v); return; }
@@ -35,7 +38,18 @@ const get = (k: string, d?: any) => {
 };
 const remove = (k: string) => { const m = getStore(); delete m[k]; setStore(m); };
 
-const toB64 = (buf: ArrayBuffer) => btoa(String.fromCharCode(...new Uint8Array(buf)));
+function bytesFrom(v: ArrayBuffer | ArrayBufferView | ArrayBufferLike) {
+  if (typeof ArrayBuffer !== 'undefined' && (ArrayBuffer as any).isView && (ArrayBuffer as any).isView(v)) {
+    const view = v as ArrayBufferView;
+    return new Uint8Array(view.buffer, view.byteOffset, view.byteLength);
+  }
+  try {
+    return new Uint8Array(v as ArrayBufferLike);
+  } catch {
+    return new Uint8Array(v as ArrayBuffer);
+  }
+}
+const toB64 = (buf: ArrayBuffer | ArrayBufferView | ArrayBufferLike) => btoa(String.fromCharCode(...bytesFrom(buf)));
 const fromB64 = (b64: string) => { const bin = atob(b64); const out = new Uint8Array(bin.length); for (let i=0;i<bin.length;i++) out[i]=bin.charCodeAt(i); return out.buffer; };
 const randomId = () => (crypto.randomUUID ? crypto.randomUUID() : String(Date.now())+Math.random().toString(36).slice(2));
 
