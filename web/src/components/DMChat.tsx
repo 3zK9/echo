@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { initDevice, ensureSessionWithPeer, encryptForPeer, replenishIfNeeded } from "@/lib/signal/client";
+import { initDevice, ensureSessionWithPeer, encryptForPeer, replenishIfNeeded, decryptFromPeer, resetAllSessions } from "@/lib/signal/client";
 
 type Message = {
   id: string;
@@ -18,6 +18,7 @@ export default function DMChat({ peer }: { peer: string }) {
   const [input, setInput] = useState("");
   const [cursor, setCursor] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [plaintexts, setPlaintexts] = useState<Record<string, string>>({});
   const listRef = useRef<HTMLDivElement | null>(null);
 
   const fetchPage = useCallback(async (c: string | null) => {
@@ -32,12 +33,35 @@ export default function DMChat({ peer }: { peer: string }) {
   }, [peer]);
 
   useEffect(() => {
-    (async () => { try { await initDevice(); await ensureSessionWithPeer(peer); } catch {} })();
+    (async () => { try { await initDevice(); resetAllSessions(); await ensureSessionWithPeer(peer); } catch {} })();
     setMessages([]);
     setCursor(null);
+    setPlaintexts({});
     fetchPage(null);
   }, [peer]);
 
+  // Decrypt messages as they arrive
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      for (const m of messages) {
+        if (plaintexts[m.id]) continue;
+        try {
+          const text = await decryptFromPeer(peer, m.ciphertext);
+          if (!cancelled) setPlaintexts((prev) => ({ ...prev, [m.id]: text }));
+        } catch {
+          // best-effort fallback: try base64 decode
+          try {
+            const fallback = atob(m.ciphertext.split(":").pop() || m.ciphertext);
+            if (!cancelled) setPlaintexts((prev) => ({ ...prev, [m.id]: fallback }));
+          } catch {
+            if (!cancelled) setPlaintexts((prev) => ({ ...prev, [m.id]: "(unable to decrypt)" }));
+          }
+        }
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [messages, peer]);
   
 
   const onSend = async () => {
@@ -70,8 +94,9 @@ export default function DMChat({ peer }: { peer: string }) {
         {[...messages].sort((a,b) => new Date(b.sentAt).getTime() - new Date(a.sentAt).getTime()).map((m) => (
           <div key={m.id} className="rounded-lg bg-white/5 border border-white/10 p-2">
             <div className="text-xs text-white/60">{new Date(m.sentAt).toLocaleString()}</div>
-            <div className="mt-1 whitespace-pre-wrap break-words">{/* decrypted async via placeholder: show base64 fallback for now */}
-              {(() => { try { return atob(m.ciphertext.split(":").pop() || m.ciphertext); } catch { return m.ciphertext; } })()}</div>
+            <div className="mt-1 whitespace-pre-wrap break-words">
+              {plaintexts[m.id] || "(decrypting...)"}
+            </div>
           </div>
         ))}
         {cursor && (
@@ -82,8 +107,7 @@ export default function DMChat({ peer }: { peer: string }) {
         <input value={input} onChange={(e) => setInput(e.target.value)} className="flex-1 rounded-md bg-black/20 border border-white/10 p-2 outline-none" placeholder="Write a message..." />
         <button onClick={onSend} className="btn-primary px-4 py-2" disabled={loading || !input.trim()}>Send</button>
       </div>
-      <div className="mt-2 text-xs text-white/50">End‑to‑end encryption uses your device keys. This MVP uses client‑side encryption placeholder; integrate Signal next.</div>
+      <div className="mt-2 text-xs text-white/50">End‑to‑end encryption powered by Signal sessions on your device.</div>
     </div>
   );
 }
-

@@ -34,6 +34,21 @@ function createStore() {
   } as any;
 }
 
+// Clear all stored Signal sessions and cached peer identities (but keep local identity + keys)
+export function resetAllSessions() {
+  try {
+    const m = getStore();
+    const keep: StoreMap = {};
+    for (const [k, v] of Object.entries(m)) {
+      // Remove sessions and cached peer identity keys; keep everything else
+      if (k.startsWith('session')) continue;
+      if (k.startsWith('identityKey_')) continue;
+      keep[k] = v;
+    }
+    setStore(keep);
+  } catch {}
+}
+
 export async function initDevice() {
   let deviceId = localStorage.getItem(LS.deviceId); if (!deviceId) { deviceId = randomId(); localStorage.setItem(LS.deviceId, deviceId); }
   const idKeyRaw = localStorage.getItem(LS.idKey); const regIdRaw = localStorage.getItem(LS.regId);
@@ -85,17 +100,21 @@ export async function ensureSessionWithPeer(username: string) {
 }
 
 export async function encryptForPeer(username: string, plaintext: string) {
+  // Use bundle to establish/refresh a session before encrypt
   const info = await (await fetch(`/api/dm/users/${encodeURIComponent(username)}/bundle`)).json();
   const address = new signal.SignalProtocolAddress(String(info.userId), 1);
   const cipher = new signal.SessionCipher(createStore() as any, address);
   const plainBuf = new TextEncoder().encode(plaintext).buffer as ArrayBuffer;
-  const res = await cipher.encrypt(plainBuf);
-  if ((res as any)?.body) return toB64((res as any).body as ArrayBuffer);
-  return toB64(res as unknown as ArrayBuffer);
+  const res: any = await cipher.encrypt(plainBuf);
+  // libsignal exposes .type and either .serialize() or .body
+  const type: number = typeof res?.type === 'number' ? res.type : 1;
+  const buf: ArrayBuffer = typeof res?.serialize === 'function' ? res.serialize() : (res?.body as ArrayBuffer) || (res as ArrayBuffer);
+  return `${type}:${toB64(buf)}`;
 }
 
 export async function decryptFromPeer(username: string, payload: string) {
-  const info = await (await fetch(`/api/dm/users/${encodeURIComponent(username)}/bundle`)).json();
+  // Only fetch identity to get stable address; do NOT consume a new prekey here
+  const info = await (await fetch(`/api/dm/users/${encodeURIComponent(username)}/identity`)).json();
   const address = new signal.SignalProtocolAddress(String(info.userId), 1);
   const cipher = new signal.SessionCipher(createStore() as any, address);
   const [typeStr, b64] = payload.split(':', 2);
