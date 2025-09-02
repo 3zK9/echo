@@ -52,6 +52,9 @@ model User {
   echoes         Echo[]
   likes          EchoLike[]
   profile        Profile?
+  devices        Device[]
+  sentDMs        DMMessage[] @relation("DMFromUser")
+  receivedDMs    DMMessage[] @relation("DMToUser")
 
   accounts       Account[]
   sessions       Session[]
@@ -109,4 +112,62 @@ model Profile {
   bio       String? @db.Text
   link      String? @db.Text
   updatedAt DateTime @updatedAt
+}
+
+
+// E2EE Signal MVP models
+model Device {
+  id              String   @id // client-assigned device id (e.g., uuid/cuid)
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  registrationId  Int
+  identityKeyPub  String   @db.Text
+  createdAt       DateTime @default(now())
+
+  signedPreKeys   SignedPreKey[]
+  preKeys         PreKey[]
+  messages        DMMessage[] @relation("SenderDeviceMessages")
+
+  @@index([userId, createdAt])
+}
+
+model SignedPreKey {
+  deviceId   String
+  device     Device  @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  keyId      Int
+  pubKey     String  @db.Text
+  signature  String  @db.Text
+  createdAt  DateTime @default(now())
+
+  @@id([deviceId, keyId])
+  @@index([deviceId, createdAt])
+}
+
+model PreKey {
+  deviceId   String
+  device     Device  @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  keyId      Int
+  pubKey     String  @db.Text
+  consumedAt DateTime?
+
+  @@id([deviceId, keyId])
+  @@index([deviceId, consumedAt])
+}
+
+model DMMessage {
+  id             String   @id @default(cuid())
+  fromUserId     String
+  toUserId       String
+  senderDeviceId String
+  ciphertext     String   @db.Text
+  sentAt         DateTime @default(now())
+  deliveredAt    DateTime?
+  readAt         DateTime?
+
+  fromUser User    @relation("DMFromUser", fields: [fromUserId], references: [id], onDelete: Cascade)
+  toUser   User    @relation("DMToUser", fields: [toUserId], references: [id], onDelete: Cascade)
+  sender   Device  @relation("SenderDeviceMessages", fields: [senderDeviceId], references: [id], onDelete: NoAction)
+
+  @@index([fromUserId, toUserId, sentAt])
+  @@index([toUserId, sentAt])
 }

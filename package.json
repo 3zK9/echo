@@ -1,5 +1,6 @@
 {
   "dependencies": {
+    "@privacyresearch/libsignal-protocol-typescript": "^0.0.16",
     "@vercel/analytics": "^1.5.0",
     "@vercel/speed-insights": "^1.2.0"
   }
