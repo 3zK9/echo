@@ -7,7 +7,7 @@ import { useToast } from "@/components/Toast";
 import { useConfirm } from "@/components/Confirm";
 import { mutate } from "swr";
 
-export default function EchoList({ items, username }: { items: Echo[]; username?: string }) {
+export default function EchoList({ items, username, likedByUser }: { items: Echo[]; username?: string; likedByUser?: string }) {
   const { data: session } = useSession();
   const { show } = useToast();
   const confirm = useConfirm();
@@ -169,6 +169,7 @@ export default function EchoList({ items, username }: { items: Echo[]; username?
             likesCount={t.likes}
             repostsCount={t.reposts}
             likedByMe={t.liked}
+            likedByUser={likedByUser}
             onDelete={() => onDelete(t.id)}
           />
         );})}

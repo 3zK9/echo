@@ -122,7 +122,7 @@ export default function ProfileFeed({ username, tab, initialEchoes, initialLikes
   if (loading && activeItems.length === 0) return <EchoSkeletonList count={4} />;
   return (
     <>
-      <EchoList items={activeItems} username={username} />
+      <EchoList items={activeItems} username={username} likedByUser={tab === "likes" ? username : undefined} />
       <div ref={sentinelRef} />
     </>
   );

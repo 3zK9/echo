@@ -43,13 +43,21 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ user
       take: limit,
       include: { echo: { include: { author: { select: { name: true, username: true, image: true } }, _count: { select: { likes: true, reposts: true, replies: true } }, original: { include: { author: { select: { name: true, username: true, image: true } }, _count: { select: { likes: true, reposts: true, replies: true } } } } } } },
     });
+    // Determine which of these echoes are also liked by the current viewer
+    const baseIds = likes.map((l) => l.echo.originalId || l.echo.id);
+    const viewerLiked = new Set<string>();
+    if (meId && baseIds.length) {
+      const mine = await prisma.echoLike.findMany({ where: { userId: meId, echoId: { in: baseIds } }, select: { echoId: true } });
+      mine.forEach((m) => viewerLiked.add(m.echoId));
+    }
     const rows = likes
       .filter((l) => !l.echo.originalId)
       .map((l) => {
         const e = l.echo;
         const display = e.original ?? e;
+        const baseId = e.originalId || e.id;
         return {
-          id: e.originalId || e.id,
+          id: baseId,
           name: display.author?.name || display.author?.username || "User",
           handle: display.author?.username || sanitizeHandle(display.author?.name || undefined),
           time: relTime((display.createdAt as Date) || (e.createdAt as Date)),
@@ -57,7 +65,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ user
           likes: display._count?.likes ?? 0,
           reposts: display._count?.reposts ?? 0,
           replies: display._count?.replies ?? 0,
-          liked: true,
+          liked: viewerLiked.has(baseId),
           reposted: false,
           avatarUrl: display.author?.image || undefined,
           originalId: e.originalId || undefined,
