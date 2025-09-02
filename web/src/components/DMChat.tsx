@@ -62,10 +62,7 @@ export default function DMChat({ peer }: { peer: string }) {
 
   return (
     <div className="panel p-3 h-[70vh] flex flex-col">
-      <div className="flex items-center justify-between mb-2">
-        <div className="text-lg font-semibold">Direct Messages with @{peer}</div>
-        <SafetyNumber peer={peer} />
-      </div>
+      <div className="text-lg font-semibold mb-2">Direct Messages with @{peer}</div>
       <div ref={listRef} className="flex-1 overflow-auto flex flex-col-reverse gap-2">
         {[...messages].sort((a,b) => new Date(b.sentAt).getTime() - new Date(a.sentAt).getTime()).map((m) => (
           <div key={m.id} className="rounded-lg bg-white/5 border border-white/10 p-2">
@@ -88,28 +85,3 @@ export default function DMChat({ peer }: { peer: string }) {
 }
 
 
-function SafetyNumber({ peer }: { peer: string }) {
-  const [safety, setSafety] = useState<string>("");
-  useEffect(() => {
-    (async () => {
-      try {
-        const meRaw = localStorage.getItem('signal_identity_key_v1');
-        if (!meRaw) return;
-        const me = JSON.parse(meRaw);
-        const resp = await fetch(`/api/dm/users/${encodeURIComponent(peer)}/identity`);
-        if (!resp.ok) return;
-        const peerId = await resp.json();
-        const concat = me.pubKey + ':' + (peerId.identityKeyPub as string);
-        const enc = new TextEncoder().encode(concat);
-        const hashBuf = await crypto.subtle.digest('SHA-256', enc);
-        const bytes = Array.from(new Uint8Array(hashBuf));
-        const hex = bytes.map(b => b.toString(16).padStart(2,'0')).join('');
-        const groups = hex.match(/.{1,4}/g)?.slice(0, 10) || [];
-        setSafety(groups.join(' '));
-      } catch {}
-    })();
-  }, [peer]);
-  return (
-    <div className="text-[10px] text-white/60 border border-white/10 rounded-full px-2 py-1" title="Verify this safety number with your contact">{safety || 'verifying...'}</div>
-  );
-}
