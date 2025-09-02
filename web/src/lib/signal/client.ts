@@ -20,17 +20,62 @@ const randomId = () => (crypto.randomUUID ? crypto.randomUUID() : String(Date.no
 
 function createStore() {
   return {
+    // Identity keys for this device
     getIdentityKeyPair: async () => {
       const raw = localStorage.getItem(LS.idKey); if (!raw) throw new Error('no_identity'); const j = JSON.parse(raw);
       return { privKey: fromB64(j.privKey), pubKey: fromB64(j.pubKey) } as signal.KeyPairType;
     },
     getLocalRegistrationId: async () => { const raw = localStorage.getItem(LS.regId); if (!raw) throw new Error('no_registration'); return Number(raw); },
+
+    // Session store API
+    loadSession: async (address: string) => {
+      const v = get(`session${address}`);
+      return v ? fromB64(v) : undefined;
+    },
+    storeSession: async (address: string, record: ArrayBuffer) => {
+      put(`session${address}`, toB64(record));
+    },
+    removeSession: async (address: string) => {
+      remove(`session${address}`);
+    },
+
+    // PreKey store API
+    loadPreKey: async (keyId: number) => {
+      const v = get(`25519KeypreKey${keyId}`);
+      if (!v) throw new Error('no_prekey');
+      const j = JSON.parse(v);
+      return { pubKey: fromB64(j.pubKey), privKey: fromB64(j.privKey) } as signal.KeyPairType;
+    },
+    storePreKey: async (keyId: number, keyPair: signal.KeyPairType) => {
+      put(`25519KeypreKey${keyId}`, JSON.stringify({ pubKey: toB64(keyPair.pubKey), privKey: toB64(keyPair.privKey) }));
+    },
+    removePreKey: async (keyId: number) => {
+      remove(`25519KeypreKey${keyId}`);
+    },
+
+    // Signed PreKey store API
+    loadSignedPreKey: async (keyId: number) => {
+      const v = get(`25519KeysignedKey${keyId}`);
+      if (!v) throw new Error('no_signed_prekey');
+      const j = JSON.parse(v);
+      return { pubKey: fromB64(j.pubKey), privKey: fromB64(j.privKey) } as signal.KeyPairType;
+    },
+    storeSignedPreKey: async (keyId: number, keyPair: signal.KeyPairType) => {
+      put(`25519KeysignedKey${keyId}`, JSON.stringify({ pubKey: toB64(keyPair.pubKey), privKey: toB64(keyPair.privKey) }));
+    },
+
+    // Identity (peer) trust and cache
+    isTrustedIdentity: async (_id: any, _idKey: ArrayBuffer) => true,
+    loadIdentity: async (id: any) => {
+      const v = get('identityKey_'+id);
+      return v ? fromB64(v) : undefined;
+    },
+    saveIdentity: async (id: any, key: ArrayBuffer) => { put('identityKey_'+id, toB64(key)); return true; },
+
+    // Generic passthrough helpers (not required by lib, but handy)
     put: (key: string, value: any) => { put(key, typeof value==='string'?value:JSON.stringify(value)); },
     get: (key: string, defaultValue?: any) => { const v = get(key); if (v===undefined) return defaultValue; try { return JSON.parse(v); } catch { return v; } },
     remove: (key: string) => remove(key),
-    isTrustedIdentity: async (_id: any, _idKey: ArrayBuffer) => true,
-    loadIdentityKey: async (id: any) => get('identityKey_'+id),
-    saveIdentity: async (id: any, key: ArrayBuffer) => { put('identityKey_'+id, toB64(key)); return true; },
   } as any;
 }
 
