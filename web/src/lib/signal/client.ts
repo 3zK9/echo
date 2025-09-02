@@ -34,7 +34,8 @@ const get = (k: string, d?: any) => {
   const raw = getRaw(k);
   if (raw === undefined) return d;
   if (typeof raw === 'string' && raw.startsWith('b64:')) return fromB64(raw.slice(4));
-  try { return JSON.parse(raw as string); } catch { return raw; }
+  // Return raw string; libsignal handles JSON.parse internally for its records
+  return raw;
 };
 const remove = (k: string) => { const m = getStore(); delete m[k]; setStore(m); };
 
@@ -123,7 +124,8 @@ function createStore() {
       const raw = getRaw(key);
       if (raw === undefined) return defaultValue;
       if (typeof raw === 'string' && raw.startsWith('b64:')) return fromB64(raw.slice(4));
-      try { return JSON.parse(raw as string); } catch { return raw; }
+      // Return raw; libsignal will JSON.parse where needed
+      return raw;
     },
     remove: (key: string) => remove(key),
   } as any;
@@ -239,13 +241,26 @@ export async function decryptFromPeer(username: string, payload: string) {
   // Only fetch identity to get stable address; do NOT consume a new prekey here
   const info = await (await fetch(`/api/dm/users/${encodeURIComponent(username)}/identity`)).json();
   const address = new signal.SignalProtocolAddress(String(info.userId), 1);
-  const cipher = new signal.SessionCipher(createStore() as any, address);
+  const store = createStore() as any;
+  const cipher = new signal.SessionCipher(store, address);
   const [typeStr, b64] = payload.split(':', 2);
   const type = Number(typeStr) || 1; const buf = fromB64(b64 || payload);
-  let plain: ArrayBuffer;
-  if (type === 3) plain = await cipher.decryptPreKeyWhisperMessage(buf, 'binary');
-  else plain = await cipher.decryptWhisperMessage(buf, 'binary');
-  return new TextDecoder().decode(plain);
+  async function attemptDecrypt() {
+    let plain: ArrayBuffer;
+    if (type === 3) plain = await cipher.decryptPreKeyWhisperMessage(buf, 'binary');
+    else plain = await cipher.decryptWhisperMessage(buf, 'binary');
+    return new TextDecoder().decode(plain);
+  }
+  try {
+    return await attemptDecrypt();
+  } catch (err: any) {
+    const msg = String(err?.message || err || '');
+    if (msg.includes('valid JSON') || msg.includes('deserialize')) {
+      try { if (typeof store.removeSession === 'function') await store.removeSession(address.toString()); } catch {}
+      return await attemptDecrypt();
+    }
+    throw err;
+  }
 }
 
 
