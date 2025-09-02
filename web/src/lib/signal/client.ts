@@ -78,7 +78,7 @@ export async function ensureSessionWithPeer(username: string) {
     identityKey: fromB64(b.identityKeyPub),
     signedPreKey: { keyId: Number(b.signedPreKey.keyId), publicKey: fromB64(b.signedPreKey.pubKey), signature: fromB64(b.signedPreKey.signature) },
     preKey: { keyId: Number(b.preKey.keyId), publicKey: fromB64(b.preKey.pubKey) },
-  } as signal.PreKeyBundle;
+  } as any;
   const address = new signal.SignalProtocolAddress(String(b.userId), 1);
   const builder = new signal.SessionBuilder(createStore() as any, address);
   await builder.processPreKey(preKeyBundle);
