@@ -29,14 +29,14 @@ export default function DMChat({ peer }: { peer: string }) {
     const data = await res.json();
     setMessages((prev) => [...prev, ...(data.items || [])]);
     setCursor(data.nextCursor);
-  }, [peer]);
+  }, [peer, fetchPage]);
 
   useEffect(() => {
     (async () => { try { await initDevice(); await ensureSessionWithPeer(peer); } catch {} })();
     setMessages([]);
     setCursor(null);
     fetchPage(null);
-  }, [peer]);
+  }, [peer, fetchPage]);
 
   
 
@@ -108,7 +108,7 @@ function SafetyNumber({ peer }: { peer: string }) {
         setSafety(groups.join(' '));
       } catch {}
     })();
-  }, [peer]);
+  }, [peer, fetchPage]);
   return (
     <div className="text-[10px] text-white/60 border border-white/10 rounded-full px-2 py-1" title="Verify this safety number with your contact">{safety || 'verifying...'}</div>
   );

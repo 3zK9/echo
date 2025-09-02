@@ -31,7 +31,7 @@ function createStore() {
     isTrustedIdentity: async (_id: any, _idKey: ArrayBuffer) => true,
     loadIdentityKey: async (id: any) => get('identityKey_'+id),
     saveIdentity: async (id: any, key: ArrayBuffer) => { put('identityKey_'+id, toB64(key)); return true; },
-  } as unknown as signal.SignalProtocolStore;
+  } as any;
 }
 
 export async function initDevice() {
