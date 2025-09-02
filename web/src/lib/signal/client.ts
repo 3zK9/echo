@@ -106,9 +106,25 @@ function createStore() {
     },
     saveIdentity: async (id: any, key: ArrayBuffer) => { put('identityKey_'+id, key); return true; },
 
-    // Generic passthrough helpers (not required by lib, but handy)
-    put: (key: string, value: any) => { put(key, typeof value==='string'?value:JSON.stringify(value)); },
-    get: (key: string, defaultValue?: any) => { const v = get(key); if (v===undefined) return defaultValue; try { return JSON.parse(v); } catch { return v; } },
+    // Generic passthrough helpers (used by libsignal in some code paths)
+    put: (key: string, value: any) => {
+      if (typeof value === 'string') { putRaw(key, value); return; }
+      if (isArrayBufferLike(value)) { putRaw(key, `b64:${toB64(value as any)}`); return; }
+      // Prefer objects to be JSON-encoded; handle BigInt and circular refs resiliently
+      const seen = new WeakSet<any>();
+      const json = JSON.stringify(value, (_k, val) => {
+        if (typeof val === 'bigint') return val.toString();
+        if (val && typeof val === 'object') { if (seen.has(val)) return undefined; seen.add(val); }
+        return val;
+      });
+      putRaw(key, json ?? 'null');
+    },
+    get: (key: string, defaultValue?: any) => {
+      const raw = getRaw(key);
+      if (raw === undefined) return defaultValue;
+      if (typeof raw === 'string' && raw.startsWith('b64:')) return fromB64(raw.slice(4));
+      try { return JSON.parse(raw as string); } catch { return raw; }
+    },
     remove: (key: string) => remove(key),
   } as any;
 }
@@ -174,7 +190,10 @@ export async function ensureSessionWithPeer(username: string) {
     preKey: { keyId: Number(b.preKey.keyId), publicKey: fromB64(b.preKey.pubKey) },
   } as any;
   const address = new signal.SignalProtocolAddress(String(b.userId), 1);
-  const builder = new signal.SessionBuilder(createStore() as any, address);
+  const store = createStore() as any;
+  // Clear any stale/corrupt session record for this address before creating a new one
+  try { if (typeof store.removeSession === 'function') await store.removeSession(address.toString()); } catch {}
+  const builder = new signal.SessionBuilder(store, address);
   await builder.processPreKey(preKeyBundle);
 }
 
@@ -193,12 +212,27 @@ export async function encryptForPeer(username: string, plaintext: string) {
   if (!identRes.ok) throw new Error('peer_not_ready');
   const ident = await identRes.json();
   const address = new signal.SignalProtocolAddress(String(ident.userId), 1);
-  const cipher = new signal.SessionCipher(createStore() as any, address);
+  const store = createStore() as any;
+  const cipher = new signal.SessionCipher(store, address);
   const plainBuf = new TextEncoder().encode(plaintext).buffer as ArrayBuffer;
-  const res: any = await cipher.encrypt(plainBuf);
-  const type: number = typeof res?.type === 'number' ? res.type : 1;
-  const buf: ArrayBuffer = typeof res?.serialize === 'function' ? res.serialize() : (res?.body as ArrayBuffer) || (res as ArrayBuffer);
-  return `${type}:${toB64(buf)}`;
+  async function attemptEncrypt() {
+    const res: any = await cipher.encrypt(plainBuf);
+    const type: number = typeof res?.type === 'number' ? res.type : 1;
+    const buf: ArrayBuffer = typeof res?.serialize === 'function' ? res.serialize() : (res?.body as ArrayBuffer) || (res as ArrayBuffer);
+    return `${type}:${toB64(buf)}`;
+  }
+  try {
+    return await attemptEncrypt();
+  } catch (err: any) {
+    const msg = String(err?.message || err || '');
+    // If session state is corrupt/stale, clear and retry once
+    if (msg.includes('valid JSON') || msg.includes('No record for') || msg.includes('deserialize')) {
+      try { if (typeof store.removeSession === 'function') await store.removeSession(address.toString()); } catch {}
+      await ensureSessionWithPeer(username);
+      return await attemptEncrypt();
+    }
+    throw err;
+  }
 }
 
 export async function decryptFromPeer(username: string, payload: string) {
