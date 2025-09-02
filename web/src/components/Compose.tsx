@@ -24,13 +24,14 @@ export default function Compose({ onPost, initialText = "" }: { onPost?: (text: 
     try {
       const u = new URL(window.location.href);
       const mention = u.searchParams.get("mention");
-      if (mention && !initialText && text.trim().length === 0) {
+      const empty = !inputRef.current || inputRef.current.value.trim().length === 0;
+      if (mention && !initialText && empty) {
         const pre = `@${mention} `;
         setText(pre.slice(0, MAX_LEN));
         inputRef.current?.focus();
       }
     } catch {}
-  }, []);
+  }, [initialText]);
 
   useEffect(() => {
     const next = initialText.slice(0, MAX_LEN);

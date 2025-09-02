@@ -36,7 +36,7 @@ function createStore() {
 
 export async function initDevice() {
   let deviceId = localStorage.getItem(LS.deviceId); if (!deviceId) { deviceId = randomId(); localStorage.setItem(LS.deviceId, deviceId); }
-  let idKeyRaw = localStorage.getItem(LS.idKey); let regIdRaw = localStorage.getItem(LS.regId);
+  const idKeyRaw = localStorage.getItem(LS.idKey); const regIdRaw = localStorage.getItem(LS.regId);
   if (!idKeyRaw || !regIdRaw) {
     const idPair = await signal.KeyHelper.generateIdentityKeyPair();
     const regId = await signal.KeyHelper.generateRegistrationId();
