@@ -243,23 +243,30 @@ export async function decryptFromPeer(username: string, payload: string) {
   const address = new signal.SignalProtocolAddress(String(info.userId), 1);
   const store = createStore() as any;
   const cipher = new signal.SessionCipher(store, address);
-  const [typeStr, b64] = payload.split(':', 2);
-  const type = Number(typeStr) || 1; const buf = fromB64(b64 || payload);
-  async function attemptDecrypt() {
-    let plain: ArrayBuffer;
-    if (type === 3) plain = await cipher.decryptPreKeyWhisperMessage(buf, 'binary');
-    else plain = await cipher.decryptWhisperMessage(buf, 'binary');
-    return new TextDecoder().decode(plain);
-  }
+  const [_typeStr, b64] = payload.split(':', 2);
+  const buf = fromB64(b64 || payload);
+  // Try as prekey message first, then as whisper
   try {
-    return await attemptDecrypt();
-  } catch (err: any) {
-    const msg = String(err?.message || err || '');
-    if (msg.includes('valid JSON') || msg.includes('deserialize')) {
-      try { if (typeof store.removeSession === 'function') await store.removeSession(address.toString()); } catch {}
-      return await attemptDecrypt();
+    const plain = await cipher.decryptPreKeyWhisperMessage(buf, 'binary');
+    return new TextDecoder().decode(plain);
+  } catch (e1: any) {
+    try {
+      const plain = await cipher.decryptWhisperMessage(buf, 'binary');
+      return new TextDecoder().decode(plain);
+    } catch (e2: any) {
+      const msg = String(e2?.message || e2 || e1);
+      if (msg.includes('valid JSON') || msg.includes('deserialize')) {
+        try { if (typeof store.removeSession === 'function') await store.removeSession(address.toString()); } catch {}
+        try {
+          const plain = await cipher.decryptPreKeyWhisperMessage(buf, 'binary');
+          return new TextDecoder().decode(plain);
+        } catch {
+          const plain = await cipher.decryptWhisperMessage(buf, 'binary');
+          return new TextDecoder().decode(plain);
+        }
+      }
+      throw e2;
     }
-    throw err;
   }
 }
 

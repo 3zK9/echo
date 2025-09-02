@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { initDevice, ensureSessionWithPeer, encryptForPeer, replenishIfNeeded, decryptFromPeer } from "@/lib/signal/client";
+import { useSession } from "next-auth/react";
 
 type Message = {
   id: string;
@@ -20,7 +21,10 @@ export default function DMChat({ peer }: { peer: string }) {
   const [loading, setLoading] = useState(false);
   const [plaintexts, setPlaintexts] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
+  const [sentPlainByCipher, setSentPlainByCipher] = useState<Record<string, string>>({});
   const listRef = useRef<HTMLDivElement | null>(null);
+  const { data: session } = useSession();
+  const myId = (session?.user as any)?.id as string | undefined;
 
   const fetchPage = useCallback(async (c: string | null) => {
     const params = new URLSearchParams();
@@ -39,6 +43,7 @@ export default function DMChat({ peer }: { peer: string }) {
     setCursor(null);
     setPlaintexts({});
     setError(null);
+    setSentPlainByCipher({});
     fetchPage(null);
   }, [peer]);
 
@@ -47,6 +52,8 @@ export default function DMChat({ peer }: { peer: string }) {
     let cancelled = false;
     (async () => {
       for (const m of messages) {
+        // Only decrypt incoming messages; for outgoing we show the original text
+        if (m.fromUserId === myId) continue;
         if (plaintexts[m.id]) continue;
         try {
           const text = await decryptFromPeer(peer, m.ciphertext);
@@ -63,7 +70,7 @@ export default function DMChat({ peer }: { peer: string }) {
       }
     })();
     return () => { cancelled = true; };
-  }, [messages, peer]);
+  }, [messages, peer, myId, plaintexts]);
   
 
   const onSend = async () => {
@@ -74,6 +81,8 @@ export default function DMChat({ peer }: { peer: string }) {
       await initDevice();
       // Try encryption with existing session; establish if needed inside helper
       const ciphertext = await encryptForPeer(peer, text);
+      // Remember plaintext by ciphertext for our own sent messages
+      setSentPlainByCipher((prev) => ({ ...prev, [ciphertext]: text }));
       const deviceId = typeof window !== 'undefined' ? (localStorage.getItem('signal_device_id_v1') || 'web') : 'web';
       const res = await fetch(`/api/dm/messages`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ toUsername: peer, senderDeviceId: deviceId, ciphertext }) });
       if (res.ok) {
@@ -108,7 +117,9 @@ export default function DMChat({ peer }: { peer: string }) {
           <div key={m.id} className="rounded-lg bg-white/5 border border-white/10 p-2">
             <div className="text-xs text-white/60">{new Date(m.sentAt).toLocaleString()}</div>
             <div className="mt-1 whitespace-pre-wrap break-words">
-              {plaintexts[m.id] || "(decrypting...)"}
+              {m.fromUserId === myId
+                ? (sentPlainByCipher[m.ciphertext] ?? "(sent)")
+                : (plaintexts[m.id] || "(decrypting...)")}
             </div>
           </div>
         ))}
