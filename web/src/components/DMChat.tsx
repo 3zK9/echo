@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { initDevice, ensureSessionWithPeer, encryptForPeer, decryptFromPeer, replenishIfNeeded } from "@/lib/signal/client";
+import { initDevice, ensureSessionWithPeer, encryptForPeer, replenishIfNeeded } from "@/lib/signal/client";
 
 type Message = {
   id: string;
@@ -36,7 +36,7 @@ export default function DMChat({ peer }: { peer: string }) {
     setMessages([]);
     setCursor(null);
     fetchPage(null);
-  }, [peer, fetchPage]);
+  }, [peer]);
 
   
 
@@ -108,7 +108,7 @@ function SafetyNumber({ peer }: { peer: string }) {
         setSafety(groups.join(' '));
       } catch {}
     })();
-  }, [peer, fetchPage]);
+  }, [peer]);
   return (
     <div className="text-[10px] text-white/60 border border-white/10 rounded-full px-2 py-1" title="Verify this safety number with your contact">{safety || 'verifying...'}</div>
   );
