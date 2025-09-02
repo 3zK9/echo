@@ -277,7 +277,6 @@ function EchoItem({
   likedByMe,
   onReply,
   onDelete,
-  likedByUser,
 }: {
   t: Echo;
   onLike?: (id: string) => void;
@@ -289,7 +288,6 @@ function EchoItem({
   likedByMe?: boolean;
   onReply?: (id: string) => void;
   onDelete?: (id: string) => void;
-  likedByUser?: string;
 }) {
   const { data: session } = useSession();
   const router = useRouter();
@@ -325,12 +323,6 @@ function EchoItem({
                 ? (isMine ? "Reposted by You" : "Reposted")
                 : "You reposted"}
             </span>
-          </div>
-        )}
-        {likedByUser && (
-          <div className="-mt-1 mb-1 flex items-center gap-2 text-xs text-pink-500">
-            <HeartIcon className="w-4 h-4" />
-            <span>Liked by @{likedByUser}</span>
           </div>
         )}
         {t.replyingTo && (
