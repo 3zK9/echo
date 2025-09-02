@@ -160,12 +160,14 @@ export default function ProfileHeader({
                     Edit
                   </button>
                 ) : (
-                  <Link
-                    href={`/dm/${encodeURIComponent(username)}`}
-                    className="shrink-0 px-3 py-1.5 rounded-full border border-white/10 hover:bg-white/10 text-sm font-semibold"
+                  <div
+                    className="shrink-0 px-3 py-1.5 rounded-full border border-white/10 text-sm font-semibold opacity-60 cursor-not-allowed select-none flex items-center gap-2"
+                    title="Coming soon"
+                    aria-disabled="true"
                   >
-                    Message
-                  </Link>
+                    <span>Message</span>
+                    <span className="px-1.5 py-0.5 text-[10px] leading-none rounded-full border border-white/20 text-white/70">soon</span>
+                  </div>
                 )}
               </div>
             )}
