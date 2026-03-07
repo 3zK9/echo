@@ -1,7 +1,6 @@
 "use client";
 
 import Image from "next/image";
-import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useProfile } from "@/state/profile";
 import { useToast } from "@/components/Toast";

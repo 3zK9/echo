@@ -2,13 +2,13 @@
 
 A Next.js App Router app that mimics a lightweight Twitter experience: compose “echoes”, like, repost, mention users, and browse profiles — styled with Tailwind and authenticated via GitHub OAuth (NextAuth). Data is persisted in Postgres via Prisma, and the UI uses SWR with infinite scrolling, optimistic updates, and background prefetching.
 
-The app lives under `web//`.
+The app lives under `web/`.
 
 ## Features
 
 - Splash sign‑on: unauthenticated visitors to `/` see a splash page (NextAuth GitHub sign‑in).
 - Auth: NextAuth (JWT session strategy) + Prisma adapter. Username is derived from your GitHub login.
-- First‑time setup: `/setup` route handler sets a cookie (`echo_setup=done`) then redirects.
+- First‑time setup: `/setup` route handler sets a cookie (`echo_setup=done`) then redirects back to the requested page (or `/`).
 - Global Home feed: paginated (cursor), SWR infinite scrolling, optimistic create/like/repost, and background revalidation.
 - Mentions → profiles: `@username` links to `/profile/[username]`.
 - Profiles: `/profile/[user]` with Echoes/Likes tabs, infinite scroll, cached tab switching, and background prefetch. Echoes tab shows both originals and your reposts. Likes tab excludes reposts.
@@ -30,7 +30,7 @@ The app lives under `web//`.
 
 - `src/app/page.tsx` — Home (uses `HomeFeed`)
 - `src/app/profile/[user]/page.tsx` — Profile shell (client `ProfileView` manages tabs + URL)
-- `src/app/setup/route.ts` — Sets setup cookies then redirects to `/`
+- `src/app/setup/route.ts` — Sets setup cookies then redirects to the pending callback (or `/`)
 - `src/app/api/*` — App Router API routes (echoes, likes, repost, profile)
 - `middleware.ts` — Auth gating: allows `/`, `/api/auth/*`, etc. Uses JWT or session cookie
 - `src/components/`

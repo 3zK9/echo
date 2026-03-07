@@ -45,7 +45,7 @@ export default function DMChat({ peer }: { peer: string }) {
     setError(null);
     setSentPlainByCipher({});
     fetchPage(null);
-  }, [peer]);
+  }, [peer, fetchPage]);
 
   // Decrypt messages as they arrive
   useEffect(() => {

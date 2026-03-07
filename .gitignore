@@ -32,6 +32,14 @@ web/.env
 web/.env.*
 !web/.env.example
 
+# Agent/worktree orchestration
+.worktrees/
+
+# Test runner artifacts
+playwright-report/
+test-results/
+blob-report/
+
 # Project/editor/OS extras
 .vscode/
 .idea/

@@ -2,6 +2,17 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { getToken } from "next-auth/jwt";
 
+function buildCallbackUrl(nextUrl: URL) {
+  return `${nextUrl.pathname}${nextUrl.search}`;
+}
+
+function shouldBypassSetup(pathname: string) {
+  return pathname.startsWith("/api/auth") ||
+    pathname.startsWith("/_next") ||
+    pathname.startsWith("/favicon.ico") ||
+    pathname.startsWith("/assets");
+}
+
 export default async function middleware(req: NextRequest) {
   const { nextUrl } = req;
   const pathname = nextUrl.pathname;
@@ -23,15 +34,17 @@ export default async function middleware(req: NextRequest) {
 
   if (!isLoggedIn && !isPublic) {
     const url = new URL("/", nextUrl);
-    url.searchParams.set("callbackUrl", nextUrl.pathname + nextUrl.search);
+    url.searchParams.set("callbackUrl", buildCallbackUrl(nextUrl));
     return NextResponse.redirect(url);
   }
 
   if (isLoggedIn) {
     const setupDone = req.cookies.get("echo_setup")?.value === "done";
     const isSetupRoute = pathname.startsWith("/setup");
-    if (!setupDone && !isSetupRoute) {
-      return NextResponse.redirect(new URL("/setup", nextUrl));
+    if (!setupDone && !isSetupRoute && !shouldBypassSetup(pathname)) {
+      const url = new URL("/setup", nextUrl);
+      url.searchParams.set("callbackUrl", buildCallbackUrl(nextUrl));
+      return NextResponse.redirect(url);
     }
   }
 
