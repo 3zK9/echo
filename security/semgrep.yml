@@ -1,0 +1,47 @@
+rules:
+  - id: echo.javascript.no-dynamic-code-execution
+    message: Dynamic code execution can turn untrusted input into arbitrary JavaScript.
+    severity: ERROR
+    languages: [javascript, typescript]
+    pattern-either:
+      - pattern: eval(...)
+      - pattern: new Function(...)
+      - pattern: Function(...)
+    metadata:
+      category: security
+      confidence: HIGH
+      cwe: CWE-95
+
+  - id: echo.browser.no-inner-html-assignment
+    message: Avoid assigning HTML strings directly to DOM elements.
+    severity: ERROR
+    languages: [javascript, typescript]
+    pattern: $ELEMENT.innerHTML = $VALUE
+    metadata:
+      category: security
+      confidence: HIGH
+      cwe: CWE-79
+
+  - id: echo.prisma.no-unsafe-raw-query
+    message: Prisma unsafe raw-query APIs can introduce SQL injection.
+    severity: ERROR
+    languages: [regex]
+    pattern-regex: '\.\$(?:queryRawUnsafe|executeRawUnsafe)\s*\('
+    paths:
+      include:
+        - "*.ts"
+        - "*.tsx"
+    metadata:
+      category: security
+      confidence: HIGH
+      cwe: CWE-89
+
+  - id: echo.tls.no-disabled-certificate-validation
+    message: TLS certificate validation must not be disabled.
+    severity: ERROR
+    languages: [javascript, typescript]
+    pattern: "{ ..., rejectUnauthorized: false, ... }"
+    metadata:
+      category: security
+      confidence: HIGH
+      cwe: CWE-295

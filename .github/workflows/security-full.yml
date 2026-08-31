@@ -1,0 +1,183 @@
+name: security-full
+
+on:
+  schedule:
+    - cron: "17 6 * * 1-6"
+    - cron: "43 7 * * 0"
+  workflow_dispatch:
+    inputs:
+      include_trufflehog:
+        description: Scan the complete Git history with TruffleHog
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: security-full
+  cancel-in-progress: false
+
+jobs:
+  semgrep:
+    name: semgrep-full
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Check out complete history
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Scan the complete application tree
+        run: |
+          set -euo pipefail
+          source security/versions.env
+          docker run --rm \
+            --volume "$GITHUB_WORKSPACE:/src" \
+            --workdir /src \
+            --entrypoint /bin/bash \
+            "$SEMGREP_IMAGE" \
+            -lc 'git config --global --add safe.directory /src && SEMGREP_ENFORCE=true scripts/ci/semgrep.sh full'
+
+      - name: Upload Semgrep reports
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: semgrep-full-reports-${{ github.run_attempt }}
+          path: security-reports/semgrep-full.*
+          if-no-files-found: error
+          retention-days: 30
+
+  gitleaks:
+    name: gitleaks-history
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Check out complete history
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Install verified Gitleaks binary
+        run: scripts/ci/install-tools.sh gitleaks
+
+      - name: Scan complete Git history
+        env:
+          GITLEAKS_ENFORCE: "true"
+        run: scripts/ci/gitleaks.sh full
+
+      - name: Upload redacted Gitleaks report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: gitleaks-history-report-${{ github.run_attempt }}
+          path: security-reports/gitleaks-full.sarif
+          if-no-files-found: error
+          retention-days: 30
+
+  sca:
+    name: dependency-full
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: 22.22.3
+
+      - name: Calculate Grype database cache key
+        id: grype-cache-key
+        run: echo "week=$(date -u +%G-%V)" >> "$GITHUB_OUTPUT"
+
+      - name: Restore Grype database
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: .cache/grype/db
+          key: grype-db-${{ runner.os }}-${{ steps.grype-cache-key.outputs.week }}
+
+      - name: Install verified SBOM and vulnerability tools
+        run: scripts/ci/install-tools.sh syft grype
+
+      - name: Build SBOM and scan all dependency scopes
+        env:
+          NPM_AUDIT_ENFORCE: "true"
+          GRYPE_ENFORCE: "true"
+        run: |
+          scripts/ci/npm-audit.sh runtime
+          scripts/ci/npm-audit.sh all
+          scripts/ci/sbom.sh
+          scripts/ci/grype.sh
+
+      - name: Upload dependency reports
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: dependency-full-reports-${{ github.run_attempt }}
+          path: |
+            security-reports/gl-sbom-web-npm.cdx.json
+            security-reports/grype-web.json
+            security-reports/grype-web.txt
+            security-reports/npm-audit-web-*.json
+          if-no-files-found: error
+          retention-days: 30
+
+  trufflehog:
+    name: trufflehog-history
+    if: >-
+      github.event.schedule == '43 7 * * 0' ||
+      (github.event_name == 'workflow_dispatch' && inputs.include_trufflehog)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Check out complete history
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Install verified TruffleHog binary
+        run: scripts/ci/install-tools.sh trufflehog
+
+      - name: Scan complete Git history
+        env:
+          TRUFFLEHOG_ENFORCE: "true"
+          TRUFFLEHOG_FAIL_UNKNOWN: "false"
+        run: scripts/ci/trufflehog.sh
+
+      - name: Upload sanitized TruffleHog report only
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: trufflehog-sanitized-report-${{ github.run_attempt }}
+          path: security-reports/trufflehog-history.sanitized.jsonl
+          if-no-files-found: error
+          retention-days: 30
+
+  gate:
+    name: security-full / gate
+    if: always()
+    needs: [semgrep, gitleaks, sca, trufflehog]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    permissions: {}
+    steps:
+      - name: Require completed full scans
+        env:
+          SEMGREP_RESULT: ${{ needs.semgrep.result }}
+          GITLEAKS_RESULT: ${{ needs.gitleaks.result }}
+          SCA_RESULT: ${{ needs.sca.result }}
+          TRUFFLEHOG_RESULT: ${{ needs.trufflehog.result }}
+        run: |
+          [[ "$SEMGREP_RESULT" == success ]]
+          [[ "$GITLEAKS_RESULT" == success ]]
+          [[ "$SCA_RESULT" == success ]]
+          [[ "$TRUFFLEHOG_RESULT" == success || "$TRUFFLEHOG_RESULT" == skipped ]]

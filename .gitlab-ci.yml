@@ -1,0 +1,159 @@
+stages:
+  - verify
+  - conclude
+
+workflow:
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_PIPELINE_SOURCE == "web"'
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+
+default:
+  tags: [kubernetes]
+  interruptible: true
+  image: node:22.22.3-bookworm-slim@sha256:e21fc383b50d5347dc7a9f1cae45b8f4e2f0d39f7ade28e4eef7d2934522b752
+
+variables:
+  GIT_DEPTH: "0"
+  npm_config_cache: "$CI_PROJECT_DIR/.cache/npm"
+  GRYPE_DB_CACHE_DIR: "$CI_PROJECT_DIR/.cache/grype/db"
+
+.install_security_prerequisites:
+  before_script:
+    - apt-get update
+    - apt-get install --yes --no-install-recommends ca-certificates curl git jq
+    - rm -rf /var/lib/apt/lists/*
+
+quality:
+  stage: verify
+  timeout: 20m
+  cache:
+    key:
+      files:
+        - web/package-lock.json
+    paths:
+      - .cache/npm/
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+      when: never
+    - when: on_success
+  script:
+    - scripts/ci/quality.sh
+
+security:semgrep:
+  stage: verify
+  timeout: 20m
+  image:
+    name: semgrep/semgrep@sha256:b94b53d02fd4a022f9eac4e2af1380f5c3c4c21400e79d3336bdff1d1db5e796
+    entrypoint: [""]
+  script:
+    - git config --global --add safe.directory "$CI_PROJECT_DIR"
+    - |
+      mode=full
+      baseline=
+      if [[ "$CI_PIPELINE_SOURCE" == "merge_request_event" ]]; then
+        mode=diff
+        baseline="${CI_MERGE_REQUEST_DIFF_BASE_SHA:-}"
+      elif [[ "$CI_PIPELINE_SOURCE" == "push" ]]; then
+        mode=diff
+        baseline="${CI_COMMIT_BEFORE_SHA:-}"
+      fi
+      SEMGREP_ENFORCE=true scripts/ci/semgrep.sh "$mode" "$baseline"
+      cp "security-reports/semgrep-$mode.gitlab-sast.json" \
+        security-reports/gl-sast-semgrep.json
+  artifacts:
+    when: always
+    expire_in: 30 days
+    paths:
+      - security-reports/semgrep-*.json
+      - security-reports/semgrep-*.sarif
+    reports:
+      sast: security-reports/gl-sast-semgrep.json
+
+security:gitleaks:
+  extends: .install_security_prerequisites
+  stage: verify
+  timeout: 20m
+  script:
+    - scripts/ci/install-tools.sh gitleaks
+    - |
+      if [[ "$CI_PIPELINE_SOURCE" == "schedule" || "$CI_PIPELINE_SOURCE" == "web" ]]; then
+        GITLEAKS_ENFORCE=true scripts/ci/gitleaks.sh full
+      elif [[ "$CI_PIPELINE_SOURCE" == "merge_request_event" && \
+        -n "${CI_MERGE_REQUEST_DIFF_BASE_SHA:-}" && \
+        ! "$CI_MERGE_REQUEST_DIFF_BASE_SHA" =~ ^0+$ ]]; then
+        GITLEAKS_ENFORCE=true scripts/ci/gitleaks.sh diff \
+          "$CI_MERGE_REQUEST_DIFF_BASE_SHA..$CI_COMMIT_SHA"
+      elif [[ -n "${CI_COMMIT_BEFORE_SHA:-}" && ! "$CI_COMMIT_BEFORE_SHA" =~ ^0+$ ]]; then
+        GITLEAKS_ENFORCE=true scripts/ci/gitleaks.sh diff "$CI_COMMIT_BEFORE_SHA..$CI_COMMIT_SHA"
+      else
+        GITLEAKS_ENFORCE=true scripts/ci/gitleaks.sh full
+      fi
+  artifacts:
+    when: always
+    expire_in: 30 days
+    paths:
+      - security-reports/gitleaks-*.sarif
+
+security:dependencies:
+  extends: .install_security_prerequisites
+  stage: verify
+  timeout: 30m
+  variables:
+    NPM_AUDIT_ENFORCE: "true"
+    GRYPE_ENFORCE: "true"
+  cache:
+    key: grype-db-v1
+    paths:
+      - .cache/grype/db/
+  script:
+    - scripts/ci/install-tools.sh syft grype
+    - scripts/ci/npm-audit.sh runtime
+    - |
+      if [[ "$CI_PIPELINE_SOURCE" == "schedule" || "$CI_PIPELINE_SOURCE" == "web" ]]; then
+        scripts/ci/npm-audit.sh all
+      fi
+    - scripts/ci/sbom.sh
+    - scripts/ci/grype.sh
+  artifacts:
+    when: always
+    expire_in: 30 days
+    paths:
+      - security-reports/gl-sbom-web-npm.cdx.json
+      - security-reports/grype-web.json
+      - security-reports/grype-web.txt
+      - security-reports/npm-audit-web-*.json
+    reports:
+      cyclonedx: security-reports/gl-sbom-web-npm.cdx.json
+
+security:trufflehog:
+  extends: .install_security_prerequisites
+  stage: verify
+  timeout: 45m
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "schedule" && $RUN_TRUFFLEHOG == "true"'
+    - if: '$CI_PIPELINE_SOURCE == "web" && $RUN_TRUFFLEHOG == "true"'
+    - when: never
+  script:
+    - scripts/ci/install-tools.sh trufflehog
+    - TRUFFLEHOG_ENFORCE=true TRUFFLEHOG_FAIL_UNKNOWN=false scripts/ci/trufflehog.sh
+  artifacts:
+    when: always
+    expire_in: 30 days
+    paths:
+      - security-reports/trufflehog-history.sanitized.jsonl
+
+security:gate:
+  stage: conclude
+  timeout: 2m
+  needs:
+    - job: quality
+      optional: true
+    - security:semgrep
+    - security:gitleaks
+    - security:dependencies
+    - job: security:trufflehog
+      optional: true
+  script:
+    - echo "All required repository security jobs completed successfully."
