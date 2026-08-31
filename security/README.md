@@ -70,7 +70,12 @@ and package and record an owner, tracking issue, rationale, and expiry here.
 - GitHub runs fast diff-aware scans for pull requests and pushes. The full
   workflow scans the whole tree/history nightly and adds TruffleHog weekly.
 - GitLab runs the same scripts for merge requests and its default branch. A
-  schedule with `RUN_TRUFFLEHOG=true` enables the weekly history scan.
+  schedule with `RUN_TRUFFLEHOG=true` enables the weekly history scan. An owner
+  can also run the full suite on a candidate branch from the CLI:
+
+  ```sh
+  glab ci run --branch <candidate> --variables RUN_TRUFFLEHOG:true
+  ```
 - The local GitLab project is a downstream mirror of GitHub. Mirror credentials,
   runner registration tokens, deploy credentials, and production secrets belong
   in protected platform settings, never in this repository.
