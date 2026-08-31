@@ -1,0 +1,161 @@
+name: security
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: security-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  semgrep:
+    name: semgrep
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      SCAN_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+    steps:
+      - name: Check out complete history
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Run reviewed Semgrep rules
+        shell: bash
+        run: |
+          set -euo pipefail
+          source security/versions.env
+          mode=full
+          baseline=
+          if [[ -n "${SCAN_BASE:-}" && ! "$SCAN_BASE" =~ ^0+$ ]]; then
+            mode=diff
+            baseline="$SCAN_BASE"
+          fi
+          docker run --rm \
+            --volume "$GITHUB_WORKSPACE:/src" \
+            --workdir /src \
+            --env SCAN_MODE="$mode" \
+            --env SEMGREP_BASELINE="$baseline" \
+            --entrypoint /bin/bash \
+            "$SEMGREP_IMAGE" \
+            -lc 'git config --global --add safe.directory /src && SEMGREP_ENFORCE=true scripts/ci/semgrep.sh "$SCAN_MODE" "$SEMGREP_BASELINE"'
+
+      - name: Upload Semgrep reports
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: semgrep-reports-${{ github.run_attempt }}
+          path: security-reports/semgrep-*
+          if-no-files-found: error
+          retention-days: 14
+
+  gitleaks:
+    name: gitleaks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      SCAN_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+    steps:
+      - name: Check out complete history
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Install verified Gitleaks binary
+        run: scripts/ci/install-tools.sh gitleaks
+
+      - name: Scan new commits
+        shell: bash
+        run: |
+          set -euo pipefail
+          export PATH="$(scripts/ci/install-tools.sh --print-bin-dir):$PATH"
+          if [[ -n "${SCAN_BASE:-}" && ! "$SCAN_BASE" =~ ^0+$ ]]; then
+            GITLEAKS_ENFORCE=true scripts/ci/gitleaks.sh diff "$SCAN_BASE..$GITHUB_SHA"
+          else
+            GITLEAKS_ENFORCE=true scripts/ci/gitleaks.sh full
+          fi
+
+      - name: Upload redacted Gitleaks report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: gitleaks-report-${{ github.run_attempt }}
+          path: security-reports/gitleaks-*.sarif
+          if-no-files-found: error
+          retention-days: 14
+
+  sca:
+    name: dependency-scan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: 22.22.3
+
+      - name: Calculate Grype database cache key
+        id: grype-cache-key
+        run: echo "week=$(date -u +%G-%V)" >> "$GITHUB_OUTPUT"
+
+      - name: Restore Grype database
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: .cache/grype/db
+          key: grype-db-${{ runner.os }}-${{ steps.grype-cache-key.outputs.week }}
+
+      - name: Install verified SBOM and vulnerability tools
+        run: scripts/ci/install-tools.sh syft grype
+
+      - name: Build SBOM and scan dependencies
+        env:
+          NPM_AUDIT_ENFORCE: "true"
+          GRYPE_ENFORCE: "true"
+        run: |
+          scripts/ci/npm-audit.sh runtime
+          scripts/ci/sbom.sh
+          scripts/ci/grype.sh
+
+      - name: Upload dependency reports
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: dependency-reports-${{ github.run_attempt }}
+          path: |
+            security-reports/gl-sbom-web-npm.cdx.json
+            security-reports/grype-web.json
+            security-reports/grype-web.txt
+            security-reports/npm-audit-web-runtime.json
+          if-no-files-found: error
+          retention-days: 14
+
+  gate:
+    name: security / gate
+    if: always()
+    needs: [semgrep, gitleaks, sca]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    permissions: {}
+    steps:
+      - name: Require all security jobs
+        env:
+          SEMGREP_RESULT: ${{ needs.semgrep.result }}
+          GITLEAKS_RESULT: ${{ needs.gitleaks.result }}
+          SCA_RESULT: ${{ needs.sca.result }}
+        run: |
+          [[ "$SEMGREP_RESULT" == success ]]
+          [[ "$GITLEAKS_RESULT" == success ]]
+          [[ "$SCA_RESULT" == success ]]

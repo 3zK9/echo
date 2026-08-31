@@ -46,3 +46,8 @@ blob-report/
 Thumbs.db
 coverage/
 .vercel/
+
+# Local CI/security tooling
+.cache/
+security-reports/
+!security/versions.env

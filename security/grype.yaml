@@ -1,0 +1,18 @@
+check-for-app-update: false
+only-fixed: false
+add-cpes-if-none: false
+
+db:
+  auto-update: true
+  validate-by-hash-on-start: true
+  validate-age: true
+  max-allowed-built-age: 120h
+  require-update-check: false
+
+match:
+  javascript:
+    using-cpes: false
+
+# Exceptions must be scoped to an exact vulnerability/package and documented
+# with an owner, issue, rationale, and expiry in security/README.md.
+ignore: []
