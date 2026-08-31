@@ -2,10 +2,11 @@
 
 import { useSearchParams } from "next/navigation";
 import { signIn } from "next-auth/react";
+import { safeCallbackPath } from "@/lib/safe-redirect";
 
 export default function Splash() {
   const params = useSearchParams();
-  const callbackUrl = params.get("callbackUrl") ?? "/";
+  const callbackUrl = safeCallbackPath(params.get("callbackUrl"));
   return (
     <div className="min-h-screen grid place-items-center p-6">
       <div className="w-full max-w-md panel p-8 text-center">

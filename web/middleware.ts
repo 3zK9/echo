@@ -1,6 +1,23 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { getToken } from "next-auth/jwt";
+import { buildContentSecurityPolicy } from "@/lib/content-security-policy";
+
+function requestSecurityContext(request: NextRequest) {
+  const nonce = Buffer.from(crypto.randomUUID()).toString("base64");
+  const contentSecurityPolicy = buildContentSecurityPolicy(
+    nonce,
+    process.env.NODE_ENV === "development",
+  );
+  const requestHeaders = new Headers(request.headers);
+
+  // Next.js reads both request headers to apply the matching nonce to its
+  // framework scripts, inline hydration data, and generated style elements.
+  requestHeaders.set("x-nonce", nonce);
+  requestHeaders.set("Content-Security-Policy", contentSecurityPolicy);
+
+  return { contentSecurityPolicy, requestHeaders };
+}
 
 function buildCallbackUrl(nextUrl: URL) {
   return `${nextUrl.pathname}${nextUrl.search}`;
@@ -23,16 +40,26 @@ function protectAdminResponse(response: NextResponse) {
   return response;
 }
 
+function protectResponse(
+  response: NextResponse,
+  contentSecurityPolicy: string,
+  adminPath: boolean,
+) {
+  response.headers.set("Content-Security-Policy", contentSecurityPolicy);
+  return adminPath ? protectAdminResponse(response) : response;
+}
+
 export default async function middleware(req: NextRequest) {
   const { nextUrl } = req;
   const pathname = nextUrl.pathname;
   const adminPath = isAdminPath(pathname);
+  const { contentSecurityPolicy, requestHeaders } = requestSecurityContext(req);
 
   if (adminPath && req.method !== "GET" && req.method !== "HEAD") {
-    return protectAdminResponse(new NextResponse(null, {
+    return protectResponse(new NextResponse(null, {
       status: 405,
       headers: { Allow: "GET, HEAD" },
-    }));
+    }), contentSecurityPolicy, true);
   }
 
   const isPublic = pathname === "/" ||
@@ -49,7 +76,7 @@ export default async function middleware(req: NextRequest) {
     const url = new URL("/", nextUrl);
     url.searchParams.set("callbackUrl", buildCallbackUrl(nextUrl));
     const response = NextResponse.redirect(url);
-    return adminPath ? protectAdminResponse(response) : response;
+    return protectResponse(response, contentSecurityPolicy, adminPath);
   }
 
   if (isLoggedIn) {
@@ -59,12 +86,14 @@ export default async function middleware(req: NextRequest) {
       const url = new URL("/setup", nextUrl);
       url.searchParams.set("callbackUrl", buildCallbackUrl(nextUrl));
       const response = NextResponse.redirect(url);
-      return adminPath ? protectAdminResponse(response) : response;
+      return protectResponse(response, contentSecurityPolicy, adminPath);
     }
   }
 
-  const response = NextResponse.next();
-  return adminPath ? protectAdminResponse(response) : response;
+  const response = NextResponse.next({
+    request: { headers: requestHeaders },
+  });
+  return protectResponse(response, contentSecurityPolicy, adminPath);
 }
 
 export const config = {

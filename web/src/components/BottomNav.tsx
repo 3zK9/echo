@@ -53,10 +53,9 @@ export default function BottomNav() {
 
   return showNav ? (
     <nav
-      className="md:hidden fixed inset-x-0 bottom-0 z-50 bg-black/60 backdrop-blur border-t border-white/10"
+      className="md:hidden fixed inset-x-0 bottom-0 z-50 bg-black/60 backdrop-blur border-t border-white/10 [padding-bottom:env(safe-area-inset-bottom)]"
       role="navigation"
       aria-label="Primary"
-      style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
     >
       <div className="max-w-3xl mx-auto px-6 py-2 flex items-center justify-between gap-4">
         <Link href="/" className="p-2 rounded-full hover:bg-white/10" aria-label="Home">
