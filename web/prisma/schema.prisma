@@ -29,6 +29,7 @@ model Account {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([provider, providerAccountId])
+  @@index([userId, provider])
 }
 
 model Session {
@@ -46,6 +47,7 @@ model User {
   email          String?    @unique
   emailVerified  DateTime?
   image          String?
+  createdAt      DateTime   @default(now())
 
   // App-specific
   username       String?    @unique
@@ -58,6 +60,8 @@ model User {
 
   accounts       Account[]
   sessions       Session[]
+
+  @@index([createdAt])
 }
 
 model VerificationToken {
@@ -94,7 +98,7 @@ model Echo {
   @@index([replyToId])
 }
 
-model EchoLike {@@map("Like")
+model EchoLike {
   userId   String
   echoId   String
   user     User  @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -104,6 +108,7 @@ model EchoLike {@@map("Like")
   @@id([userId, echoId])
   @@index([echoId])
   @@index([userId, createdAt])
+  @@map("Like")
 }
 
 model Profile {

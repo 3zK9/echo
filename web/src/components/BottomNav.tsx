@@ -15,7 +15,9 @@ export default function BottomNav() {
   const pathname = usePathname();
   const menuRef = useRef<HTMLDivElement | null>(null);
 
-  const showNav = !!session;
+  // Keep the owner dashboard free of application controls and client-side
+  // navigation state. Its authorization and data loading are server-only.
+  const showNav = !!session && !(pathname === "/admin" || pathname.startsWith("/admin/"));
 
   const onCompose = () => {
     if (typeof window !== "undefined") {
