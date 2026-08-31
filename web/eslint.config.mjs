@@ -1,25 +1,17 @@
-import { dirname } from "path";
-import { fileURLToPath } from "url";
-import { FlatCompat } from "@eslint/eslintrc";
+import { defineConfig, globalIgnores } from "eslint/config";
+import nextVitals from "eslint-config-next/core-web-vitals";
+import nextTypeScript from "eslint-config-next/typescript";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-
-const compat = new FlatCompat({
-  baseDirectory: __dirname,
-});
-
-const eslintConfig = [
-  ...compat.extends("next/core-web-vitals", "next/typescript"),
-  {
-    ignores: [
+const eslintConfig = defineConfig([
+  ...nextVitals,
+  ...nextTypeScript,
+  globalIgnores([
       "node_modules/**",
       ".next/**",
       "out/**",
       "build/**",
       "next-env.d.ts",
-    ],
-  },
+  ]),
   {
     rules: {
       "@typescript-eslint/no-explicit-any": "off",
@@ -28,8 +20,14 @@ const eslintConfig = [
         { argsIgnorePattern: "^_", varsIgnorePattern: "^_", ignoreRestSiblings: true }
       ],
       "react-hooks/exhaustive-deps": "warn",
+      // These React 19 compiler-oriented rules are new in Next 16. Keep them
+      // visible while the existing state hydration/navigation code is
+      // migrated without turning the security upgrade into a UI rewrite.
+      "react-hooks/set-state-in-effect": "warn",
+      "react-hooks/purity": "warn",
+      "react-hooks/immutability": "warn",
     },
   },
-];
+]);
 
 export default eslintConfig;
