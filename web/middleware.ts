@@ -36,7 +36,17 @@ function isAdminPath(pathname: string) {
   return pathname === "/admin" || pathname.startsWith("/admin/");
 }
 
+function isEphemeralMessagingPath(pathname: string) {
+  return pathname === "/messages" || pathname.startsWith("/messages/");
+}
+
 function protectAdminResponse(response: NextResponse) {
+  response.headers.set("Cache-Control", "private, no-store, max-age=0, must-revalidate");
+  response.headers.set("X-Robots-Tag", "noindex, nofollow, noarchive");
+  return response;
+}
+
+function protectEphemeralMessagingResponse(response: NextResponse) {
   response.headers.set("Cache-Control", "private, no-store, max-age=0, must-revalidate");
   response.headers.set("X-Robots-Tag", "noindex, nofollow, noarchive");
   return response;
@@ -46,22 +56,25 @@ function protectResponse(
   response: NextResponse,
   contentSecurityPolicy: string,
   adminPath: boolean,
+  ephemeralMessagingPath: boolean,
 ) {
   response.headers.set("Content-Security-Policy", contentSecurityPolicy);
-  return adminPath ? protectAdminResponse(response) : response;
+  if (adminPath) return protectAdminResponse(response);
+  return ephemeralMessagingPath ? protectEphemeralMessagingResponse(response) : response;
 }
 
 export default async function middleware(req: NextRequest) {
   const { nextUrl } = req;
   const pathname = nextUrl.pathname;
   const adminPath = isAdminPath(pathname);
+  const ephemeralMessagingPath = isEphemeralMessagingPath(pathname);
   const { contentSecurityPolicy, requestHeaders } = requestSecurityContext(req);
 
   if (adminPath && req.method !== "GET" && req.method !== "HEAD") {
     return protectResponse(new NextResponse(null, {
       status: 405,
       headers: { Allow: "GET, HEAD" },
-    }), contentSecurityPolicy, true);
+    }), contentSecurityPolicy, true, false);
   }
 
   const isPublic = pathname === "/" ||
@@ -82,12 +95,12 @@ export default async function middleware(req: NextRequest) {
       return protectResponse(NextResponse.json(
         { error: "unauthorized" },
         { status: 401, headers: { "Cache-Control": "private, no-store" } },
-      ), contentSecurityPolicy, false);
+      ), contentSecurityPolicy, false, false);
     }
     const url = new URL("/", nextUrl);
     url.searchParams.set("callbackUrl", buildCallbackUrl(nextUrl));
     const response = NextResponse.redirect(url);
-    return protectResponse(response, contentSecurityPolicy, adminPath);
+    return protectResponse(response, contentSecurityPolicy, adminPath, ephemeralMessagingPath);
   }
 
   if (isLoggedIn) {
@@ -97,14 +110,14 @@ export default async function middleware(req: NextRequest) {
       const url = new URL("/setup", nextUrl);
       url.searchParams.set("callbackUrl", buildCallbackUrl(nextUrl));
       const response = NextResponse.redirect(url);
-      return protectResponse(response, contentSecurityPolicy, adminPath);
+      return protectResponse(response, contentSecurityPolicy, adminPath, ephemeralMessagingPath);
     }
   }
 
   const response = NextResponse.next({
     request: { headers: requestHeaders },
   });
-  return protectResponse(response, contentSecurityPolicy, adminPath);
+  return protectResponse(response, contentSecurityPolicy, adminPath, ephemeralMessagingPath);
 }
 
 export const config = {

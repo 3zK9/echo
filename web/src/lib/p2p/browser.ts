@@ -8,6 +8,7 @@ import {
   createSessionSigningBytes,
   DATA_CHANNEL_LABEL,
   deviceFingerprint,
+  inboxSigningBytes,
   presenceSigningBytes,
   registrationSigningBytes,
   validateP256PublicJwk,
@@ -21,6 +22,10 @@ import {
   serializeTextFrame,
   type TextFrame,
 } from "./frames";
+import {
+  hasUsableIceCandidate,
+  redactNumericHostCandidates,
+} from "./sdp";
 
 export {
   createTextFrame,
@@ -109,6 +114,7 @@ export type PinStatus =
 export type ClientSession = {
   id: string;
   role: "caller" | "callee";
+  state: "created" | "offered" | "claimed" | "closed";
   expiresAt: string;
   self: DeviceIdentity;
   peer: DeviceIdentity;
@@ -116,7 +122,10 @@ export type ClientSession = {
 
 export type InboxItem = {
   session: ClientSession;
-  signal: SignalEnvelope;
+  // A CREATED session is an identity-check invitation. It intentionally has
+  // no SDP/ICE envelope, so first-contact verification can happen before a
+  // peer connection discloses network candidates.
+  signal?: SignalEnvelope;
 };
 
 export type PreparedCloseRequest = {
@@ -478,16 +487,29 @@ export async function trustPeer(
   deviceId: string,
   fingerprint: string,
 ): Promise<PeerPin> {
-  const pin: PeerPin = {
-    key: `${PIN_PREFIX}${userId}`,
-    kind: "pin",
-    userId,
-    deviceId,
-    fingerprint,
-    trustedAt: new Date().toISOString(),
-  };
-  await putStoredValue(pin);
-  return pin;
+  requireBrowserCrypto();
+  return navigator.locks.request(`echo-p2p-pin:${userId}`, { mode: "exclusive" }, async () => {
+    const pin: PeerPin = {
+      key: `${PIN_PREFIX}${userId}`,
+      kind: "pin",
+      userId,
+      deviceId,
+      fingerprint,
+      trustedAt: new Date().toISOString(),
+    };
+    await putStoredValue(pin);
+    // Confirm the exact durable value before releasing the cross-tab lock.
+    // A concurrent tab must therefore serialize after this explicit trust
+    // decision rather than changing the pin between write and verification.
+    const persisted = await getPeerPin(userId);
+    if (!persisted || persisted.deviceId !== deviceId || persisted.fingerprint !== fingerprint) {
+      throw new BrowserP2PError(
+        "identity_storage_failed",
+        "The browser could not confirm the trusted device fingerprint.",
+      );
+    }
+    return persisted;
+  });
 }
 
 function isPlainRecord(value: unknown): value is Record<string, unknown> {
@@ -558,9 +580,14 @@ async function validateClientSession(value: unknown): Promise<ClientSession> {
   if (value.role !== "caller" && value.role !== "callee") {
     throw new P2PApiError(502, "invalid_server_response");
   }
+  if (value.state !== "created" && value.state !== "offered" &&
+      value.state !== "claimed" && value.state !== "closed") {
+    throw new P2PApiError(502, "invalid_server_response");
+  }
   return {
     id: assertUuid(value.id, "sessionId"),
     role: value.role,
+    state: value.state,
     expiresAt: assertIsoDate(value.expiresAt, "expiresAt"),
     self: await validateDeviceIdentity(value.self),
     peer: await validateDeviceIdentity(value.peer),
@@ -664,9 +691,18 @@ export async function readInbox(
   abortSignal?: AbortSignal,
 ): Promise<InboxItem[]> {
   if (!identity.deviceId) throw new BrowserP2PError("invalid_identity", "The messaging device is not registered.");
+  const input = {
+    deviceId: identity.deviceId,
+    requestId: crypto.randomUUID(),
+    issuedAt: new Date().toISOString(),
+  };
+  const signature = await signBytes(identity, inboxSigningBytes(input));
   const result = await apiRequest(
-    `/api/p2p/inbox?deviceId=${encodeURIComponent(identity.deviceId)}`,
-    { method: "GET" },
+    "/api/p2p/inbox",
+    {
+      method: "POST",
+      body: JSON.stringify({ ...input, signature }),
+    },
     abortSignal,
   );
   if (!isPlainRecord(result) || !Array.isArray(result.items)) {
@@ -674,9 +710,10 @@ export async function readInbox(
   }
   return Promise.all(result.items.map(async (value) => {
     if (!isPlainRecord(value)) throw new P2PApiError(502, "invalid_server_response");
+    const signal = value.signal === undefined ? undefined : validateSignalEnvelope(value.signal);
     return {
       session: await validateClientSession(value.session),
-      signal: validateSignalEnvelope(value.signal),
+      ...(signal ? { signal } : {}),
     };
   }));
 }
@@ -908,12 +945,12 @@ export async function waitForIceGathering(
   if (!description?.sdp || (description.type !== "offer" && description.type !== "answer")) {
     throw new BrowserP2PError("ice_gather_failed", "The browser did not gather usable connection details.");
   }
-  return { type: description.type, sdp: description.sdp };
-}
-
-export function formatSafetyCode(bytes: Uint8Array): string {
-  return Array.from(bytes.slice(0, 24), (byte) => byte.toString(16).padStart(2, "0").toUpperCase())
-    .join("")
-    .match(/.{1,4}/gu)!
-    .join(" ");
+  const privacyFilteredSdp = redactNumericHostCandidates(description.sdp);
+  if (!hasUsableIceCandidate(privacyFilteredSdp)) {
+    throw new BrowserP2PError(
+      "ice_gather_failed",
+      "No privacy-preserving network candidate was available for a direct connection.",
+    );
+  }
+  return { type: description.type, sdp: privacyFilteredSdp };
 }

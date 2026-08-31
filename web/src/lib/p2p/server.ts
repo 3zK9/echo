@@ -128,13 +128,42 @@ export async function readP2PJson(
   if (contentType !== "application/json") {
     throw new P2PHttpError(415, "json_required");
   }
-  const declaredLength = Number(req.headers.get("content-length"));
+  const contentLength = req.headers.get("content-length");
+  const declaredLength = contentLength === null ? Number.NaN : Number(contentLength);
   if (Number.isFinite(declaredLength) && declaredLength > maximumBytes) {
     throw new P2PHttpError(413, "request_too_large");
   }
-  const raw = await req.text();
-  if (new TextEncoder().encode(raw).byteLength > maximumBytes) {
-    throw new P2PHttpError(413, "request_too_large");
+
+  const reader = req.body?.getReader();
+  if (!reader) throw new P2PProtocolError("Request body is required.");
+  const chunks: Uint8Array[] = [];
+  let receivedBytes = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      receivedBytes += value.byteLength;
+      if (receivedBytes > maximumBytes) {
+        void reader.cancel().catch(() => {});
+        throw new P2PHttpError(413, "request_too_large");
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  const bytes = new Uint8Array(receivedBytes);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  let raw: string;
+  try {
+    raw = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+  } catch {
+    throw new P2PProtocolError("Request body must be UTF-8 JSON.");
   }
   const value: unknown = JSON.parse(raw);
   if (!value || typeof value !== "object" || Array.isArray(value)) {
@@ -205,6 +234,59 @@ export async function requireOwnedDevice(userId: string, deviceIdValue: unknown)
   });
   if (!device) throw new P2PHttpError(404, "not_found");
   return device;
+}
+
+type P2PDeviceMaterial = {
+  id: string;
+  userId: string;
+  signingPublicKey: string;
+  agreementPublicKey: string;
+  fingerprint: string;
+};
+
+/**
+ * Take device-row locks in a stable order. Every operation that relies on a
+ * browser-device proof takes this lock before making a durable state change;
+ * key replacement takes the same lock before revoking sessions. That makes a
+ * replacement a real authorization boundary rather than a best-effort UI
+ * update that an already verified old key can race.
+ */
+export async function lockP2PDeviceRows(
+  transaction: Prisma.TransactionClient,
+  deviceIds: readonly string[],
+): Promise<void> {
+  const ids = [...new Set(deviceIds)].sort();
+  if (!ids.length) return;
+  const uuidIds = ids.map((id) => Prisma.sql`${id}::uuid`);
+  await transaction.$queryRaw(
+    Prisma.sql`SELECT "id" FROM "RtcDevice"
+      WHERE "id" IN (${Prisma.join(uuidIds)})
+      ORDER BY "id" FOR UPDATE`,
+  );
+}
+
+export function sameP2PDeviceMaterial(
+  current: P2PDeviceMaterial | null,
+  expected: P2PDeviceMaterial,
+): current is P2PDeviceMaterial {
+  if (!current) return false;
+  return current.id === expected.id &&
+    current.userId === expected.userId &&
+    current.fingerprint === expected.fingerprint &&
+    current.signingPublicKey === expected.signingPublicKey &&
+    current.agreementPublicKey === expected.agreementPublicKey;
+}
+
+/** Call only after lockP2PDeviceRows has locked expected.id. */
+export async function requireCurrentLockedP2PDevice(
+  transaction: Prisma.TransactionClient,
+  expected: P2PDeviceMaterial,
+) {
+  const current = await transaction.rtcDevice.findUnique({ where: { id: expected.id } });
+  if (!sameP2PDeviceMaterial(current, expected)) {
+    throw new P2PHttpError(409, "device_changed");
+  }
+  return current;
 }
 
 export function deviceIdentity(
@@ -280,17 +362,6 @@ export function canonicalDeviceKeyStorage(key: P256PublicJwk): string {
 export function p2pPairKey(firstUserId: string, secondUserId: string): string {
   const [first, second] = [firstUserId, secondUserId].sort();
   return `${first.length}:${first}${second.length}:${second}`;
-}
-
-export async function cleanupExpiredP2P(now = new Date()) {
-  await prisma.$transaction(async (transaction) => {
-    await transaction.rtcSignal.deleteMany({ where: { expiresAt: { lte: now } } });
-    await transaction.rtcSession.deleteMany({ where: { expiresAt: { lte: now } } });
-    await transaction.rtcDevice.updateMany({
-      where: { onlineUntil: { lte: now } },
-      data: { onlineUntil: null },
-    });
-  });
 }
 
 export async function withSerializableRetry<T>(

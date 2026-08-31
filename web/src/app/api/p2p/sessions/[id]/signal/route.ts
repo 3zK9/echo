@@ -9,11 +9,12 @@ import {
 import {
   P2PHttpError,
   assertBodyKeys,
-  cleanupExpiredP2P,
+  lockP2PDeviceRows,
   p2pErrorResponse,
   p2pJson,
   parseStoredPublicKey,
   readP2PJson,
+  requireCurrentLockedP2PDevice,
   requireP2PMutation,
   rtcSessionInclude,
   signalMetadata,
@@ -33,8 +34,6 @@ export async function POST(
     assertBodyKeys(body, ["envelope"]);
     const envelope = validateSignalEnvelope(body.envelope);
     if (envelope.sessionId !== sessionId) throw new P2PHttpError(404, "not_found");
-    await cleanupExpiredP2P();
-
     const session = await prisma.rtcSession.findUnique({
       where: { id: sessionId },
       include: rtcSessionInclude,
@@ -44,7 +43,6 @@ export async function POST(
 
     const offer = envelope.phase === "offer";
     const expectedUserId = offer ? session.callerUserId : session.calleeUserId;
-    const expectedState = offer ? "CREATED" : "CLAIMED";
     if (user.id !== expectedUserId) throw new P2PHttpError(404, "not_found");
 
     let offerHash: string | undefined;
@@ -68,25 +66,23 @@ export async function POST(
     );
 
     const canonicalEnvelope = JSON.stringify(envelope);
-    const existing = await prisma.rtcSignal.findUnique({
-      where: {
-        sessionId_phase: {
-          sessionId,
-          phase: offer ? "OFFER" : "ANSWER",
+    const result = await withSerializableRetry(async (transaction) => {
+      await lockP2PDeviceRows(transaction, [senderDevice.id]);
+      await requireCurrentLockedP2PDevice(transaction, senderDevice);
+      const existing = await transaction.rtcSignal.findUnique({
+        where: {
+          sessionId_phase: {
+            sessionId,
+            phase: offer ? "OFFER" : "ANSWER",
+          },
         },
-      },
-    });
-    if (existing) {
-      if (existing.envelope !== canonicalEnvelope) {
-        throw new P2PHttpError(409, "signal_conflict");
+      });
+      if (existing) {
+        if (existing.envelope !== canonicalEnvelope) {
+          throw new P2PHttpError(409, "signal_conflict");
+        }
+        return { duplicate: true };
       }
-      return p2pJson({ ok: true, duplicate: true });
-    }
-    if (session.state !== expectedState) {
-      throw new P2PHttpError(409, offer ? "offer_conflict" : "claim_required");
-    }
-
-    await withSerializableRetry(async (transaction) => {
       if (offer) {
         const transitioned = await transaction.rtcSession.updateMany({
           where: {
@@ -125,9 +121,13 @@ export async function POST(
           expiresAt: session.expiresAt,
         },
       });
+      return { duplicate: false };
     });
 
-    return p2pJson({ ok: true }, { status: 201 });
+    return p2pJson(
+      { ok: true, ...(result.duplicate ? { duplicate: true } : {}) },
+      result.duplicate ? undefined : { status: 201 },
+    );
   } catch (error) {
     return p2pErrorResponse(error);
   }

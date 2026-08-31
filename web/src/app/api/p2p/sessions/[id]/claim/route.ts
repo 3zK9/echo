@@ -3,11 +3,12 @@ import { assertUuid, claimSessionSigningBytes } from "@/lib/p2p/protocol";
 import {
   P2PHttpError,
   assertBodyKeys,
-  cleanupExpiredP2P,
+  lockP2PDeviceRows,
   p2pErrorResponse,
   p2pJson,
   parseStoredPublicKey,
   readP2PJson,
+  requireCurrentLockedP2PDevice,
   requireOwnedDevice,
   requireP2PMutation,
   rtcSessionInclude,
@@ -34,40 +35,42 @@ export async function POST(
       claimSessionSigningBytes({ deviceId: device.id, sessionId, requestId, issuedAt }),
       body.signature,
     );
-    await cleanupExpiredP2P();
-
-    const session = await prisma.rtcSession.findUnique({
-      where: { id: sessionId },
-      include: rtcSessionInclude,
-    });
     const now = new Date();
-    if (
-      !session ||
-      session.expiresAt <= now ||
-      session.calleeUserId !== user.id ||
-      session.calleeDeviceId !== device.id ||
-      (session.state !== "OFFERED" && session.state !== "CLAIMED")
-    ) {
-      throw new P2PHttpError(404, "not_found");
-    }
-
-    if (session.state === "CLAIMED" && session.claimRequestId !== requestId) {
-      throw new P2PHttpError(409, "claim_conflict");
-    }
-    if (session.state === "OFFERED") {
-      const claimed = await prisma.rtcSession.updateMany({
-        where: {
-          id: session.id,
-          state: "OFFERED",
-          expiresAt: { gt: now },
-        },
-        data: { state: "CLAIMED", claimedAt: now, claimRequestId: requestId },
+    const current = await prisma.$transaction(async (transaction) => {
+      await lockP2PDeviceRows(transaction, [device.id]);
+      await requireCurrentLockedP2PDevice(transaction, device);
+      const session = await transaction.rtcSession.findUnique({
+        where: { id: sessionId },
+        include: rtcSessionInclude,
       });
-      if (claimed.count !== 1) throw new P2PHttpError(409, "claim_conflict");
-    }
-    const current = await prisma.rtcSession.findUniqueOrThrow({
-      where: { id: session.id },
-      include: rtcSessionInclude,
+      if (
+        !session ||
+        session.expiresAt <= now ||
+        session.calleeUserId !== user.id ||
+        session.calleeDeviceId !== device.id ||
+        (session.state !== "OFFERED" && session.state !== "CLAIMED")
+      ) {
+        throw new P2PHttpError(404, "not_found");
+      }
+
+      if (session.state === "CLAIMED" && session.claimRequestId !== requestId) {
+        throw new P2PHttpError(409, "claim_conflict");
+      }
+      if (session.state === "OFFERED") {
+        const claimed = await transaction.rtcSession.updateMany({
+          where: {
+            id: session.id,
+            state: "OFFERED",
+            expiresAt: { gt: now },
+          },
+          data: { state: "CLAIMED", claimedAt: now, claimRequestId: requestId },
+        });
+        if (claimed.count !== 1) throw new P2PHttpError(409, "claim_conflict");
+      }
+      return transaction.rtcSession.findUniqueOrThrow({
+        where: { id: session.id },
+        include: rtcSessionInclude,
+      });
     });
     return p2pJson({ session: sessionView(current, user.id) });
   } catch (error) {

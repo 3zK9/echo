@@ -102,7 +102,7 @@ If you accidentally named it `DATABASE_URI`:
 - Mentions like `@alice` link to `/profile/alice`. Tabs retain the user via `?tab=echoes|likes`.
 - Profile bio/link are editable only on your own profile and persist to the database.
 - Home feed is global (all users). Profile Echoes show originals and your reposts; Likes exclude reposts.
-- Messaging requires both people to keep the Messages page open. Text travels directly between browsers, disappears on refresh/disconnect, and can fail on restrictive networks because this proof does not use a TURN relay. Both the peer and STUN provider may learn the user's IP and network addresses. See `docs/live-p2p-messaging.md` for the retention, telemetry, and platform-log limits.
+- Messaging requires both people to keep the Messages page open. Text travels directly between browsers, disappears on refresh/disconnect, and can fail on restrictive networks because this proof does not use a TURN relay. A new or changed browser device must pass an out-of-band safety-code check before connection details are exchanged. Both the peer and STUN provider may learn the user's IP and network addresses. See `docs/live-p2p-messaging.md` for the retention, telemetry, and platform-log limits.
 - SWR infinite scrolling for Home and Profile. Optimistic like/repost/create with rollback on error.
 
 ## Environment Variables

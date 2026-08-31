@@ -2,11 +2,12 @@ import { prisma } from "@/lib/db";
 import { assertUuid, closeSessionSigningBytes } from "@/lib/p2p/protocol";
 import {
   assertBodyKeys,
-  cleanupExpiredP2P,
+  lockP2PDeviceRows,
   p2pEmpty,
   p2pErrorResponse,
   parseStoredPublicKey,
   readP2PJson,
+  requireCurrentLockedP2PDevice,
   requireOwnedDevice,
   requireP2PMutation,
   validateIssuedAt,
@@ -32,8 +33,10 @@ export async function DELETE(
       body.signature,
     );
 
-    await cleanupExpiredP2P();
+    const now = new Date();
     await prisma.$transaction(async (transaction) => {
+      await lockP2PDeviceRows(transaction, [device.id]);
+      await requireCurrentLockedP2PDevice(transaction, device);
       const participant = {
         id: sessionId,
         OR: [
@@ -46,8 +49,8 @@ export async function DELETE(
       // either observes CLOSED and fails, or commits first and is then deleted
       // by this transaction. The two changes become visible together at commit.
       await transaction.rtcSession.updateMany({
-        where: { ...participant, state: { not: "CLOSED" } },
-        data: { state: "CLOSED", closedAt: new Date() },
+        where: { ...participant, state: { not: "CLOSED" }, expiresAt: { gt: now } },
+        data: { state: "CLOSED", closedAt: now },
       });
       // Encrypted signaling is physically removed immediately. The bounded
       // CLOSED row is only an idempotency/rate-limit tombstone and is deleted

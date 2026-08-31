@@ -21,7 +21,10 @@ import {
   type BrowserIdentity,
   type ClientSession,
 } from "@/lib/p2p/browser";
-import { validateDataOnlySdp } from "@/lib/p2p/sdp";
+import {
+  assertPrivacyPreservingRemoteSdp,
+  redactNumericHostCandidates,
+} from "@/lib/p2p/sdp";
 
 export type EncryptedSessionDescription = {
   v: 1;
@@ -60,7 +63,14 @@ function normalizedDescription(
   if (value.type !== phase || typeof value.sdp !== "string") {
     throw new TypeError("invalid_session_description");
   }
-  return { v: P2P_PROTOCOL_VERSION, type: phase, sdp: validateDataOnlySdp(value.sdp) };
+  return {
+    v: P2P_PROTOCOL_VERSION,
+    type: phase,
+    // Keep this defensive boundary here as well as in ICE gathering: no
+    // caller of the generic sealing helper can accidentally relay a numeric
+    // host or related address.
+    sdp: redactNumericHostCandidates(value.sdp),
+  };
 }
 
 function validateDescription(value: unknown, phase: SignalPhase): EncryptedSessionDescription {
@@ -74,7 +84,13 @@ function validateDescription(value: unknown, phase: SignalPhase): EncryptedSessi
       typeof record.sdp !== "string") {
     throw new TypeError("invalid_session_description");
   }
-  return { v: P2P_PROTOCOL_VERSION, type: phase, sdp: validateDataOnlySdp(record.sdp) };
+  return {
+    v: P2P_PROTOCOL_VERSION,
+    type: phase,
+    // Do not sanitize a peer's signed payload. Reject it before callers can
+    // hand it to RTCPeerConnection.setRemoteDescription.
+    sdp: assertPrivacyPreservingRemoteSdp(record.sdp),
+  };
 }
 
 export async function sealSessionDescription(

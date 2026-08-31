@@ -38,6 +38,7 @@ test("close and key replacement lock CLOSED state before atomically deleting enc
     assert.ok(source.indexOf("rtcSignal.deleteMany") >= 0);
     assert.ok(source.indexOf("rtcSession.updateMany") < source.indexOf("rtcSignal.deleteMany"));
     assert.match(source, /state: "CLOSED"/);
+    assert.match(source, /expiresAt: \{ gt: now \}/);
   }
 });
 
@@ -50,6 +51,40 @@ test("session creation counts caller and callee abuse including CLOSED attempts"
   assert.match(source, /const targetActiveCount = await transaction\.rtcSession\.count/);
   assert.match(source, /const targetRecentInboundCount = await transaction\.rtcSession\.count/);
   assert.match(source, /targets\.length === 1/);
+  assert.match(source, /transaction\.rtcSession\.deleteMany/);
+  assert.doesNotMatch(source, /cleanupExpiredP2P/);
+});
+
+test("P2P request parsing is streaming and global expiry work stays with cron", async () => {
+  const [server, device, signal, claim, close] = await Promise.all([
+    readFile(new URL("../src/lib/p2p/server.ts", import.meta.url), "utf8"),
+    readFile(new URL("../src/app/api/p2p/device/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../src/app/api/p2p/sessions/[id]/signal/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../src/app/api/p2p/sessions/[id]/claim/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../src/app/api/p2p/sessions/[id]/route.ts", import.meta.url), "utf8"),
+  ]);
+  assert.match(server, /req\.body\?\.getReader\(\)/);
+  assert.match(server, /receivedBytes > maximumBytes/);
+  assert.doesNotMatch(server, /await req\.text\(\)/);
+  for (const source of [device, signal, claim, close]) {
+    assert.doesNotMatch(source, /cleanupExpiredP2P/);
+  }
+});
+
+test("current device material is locked before signed P2P operations use it", async () => {
+  const paths = [
+    "../src/app/api/p2p/inbox/route.ts",
+    "../src/app/api/p2p/presence/route.ts",
+    "../src/app/api/p2p/sessions/route.ts",
+    "../src/app/api/p2p/sessions/[id]/claim/route.ts",
+    "../src/app/api/p2p/sessions/[id]/route.ts",
+    "../src/app/api/p2p/sessions/[id]/signal/route.ts",
+  ];
+  const sources = await Promise.all(paths.map((path) => readFile(new URL(path, import.meta.url), "utf8")));
+  for (const source of sources) {
+    assert.match(source, /lockP2PDeviceRows/);
+    assert.match(source, /requireCurrentLockedP2PDevice/);
+  }
 });
 
 test("live messaging loads no third-party browser telemetry and API polls stay JSON", async () => {

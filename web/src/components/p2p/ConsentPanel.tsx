@@ -22,10 +22,11 @@ export default function ConsentPanel({
       <ul className="mt-4 list-disc space-y-2 pl-5 text-sm text-white/75">
         <li>Your IP and network addresses may be visible to the other person.</li>
         <li>Cloudflare&apos;s STUN service can observe connection metadata.</li>
+        <li>For a new or changed device, compare the safety code outside Echo before a direct connection begins.</li>
         <li>Echo relays encrypted connection metadata that expires after ten minutes, but never message text.</li>
         <li>Both people must be online. Messages disappear when either person leaves or reloads.</li>
         <li>Only text is supported. There are no uploads, media, previews, calls, notifications, or history.</li>
-        <li>There is no TURN relay, so the direct connection will fail on some networks.</li>
+        <li>Echo suppresses numeric local-network candidates when possible, but direct mode is not anonymous and will fail on some networks because there is no TURN relay.</li>
       </ul>
       <label className="mt-5 flex cursor-pointer items-start gap-3 rounded-xl border border-white/10 bg-white/5 p-3 text-sm">
         <input

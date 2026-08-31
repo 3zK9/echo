@@ -11,6 +11,7 @@ import {
   deviceFingerprint,
   formatSafetyCode,
   importP256AgreementKey,
+  inboxSigningBytes,
   normalizeGithubUsername,
   registrationSigningBytes,
   safetyCodeBytes,
@@ -164,6 +165,18 @@ test("session controls normalize GitHub handles before signing", () => {
     }),
   );
   assert.throws(() => normalizeGithubUsername("octocat@example.com"), P2PProtocolError);
+  assert.notDeepEqual(
+    inboxSigningBytes({
+      deviceId: callerDeviceId,
+      requestId: sessionId,
+      issuedAt: "2026-08-31T12:34:56.789Z",
+    }),
+    inboxSigningBytes({
+      deviceId: callerDeviceId,
+      requestId: sessionId,
+      issuedAt: "2026-08-31T12:34:57.789Z",
+    }),
+  );
 });
 
 test("device fingerprints and pair safety codes are stable and order independent", async () => {
@@ -176,10 +189,24 @@ test("device fingerprints and pair safety codes are stable and order independent
     await deviceFingerprint(first.signingPublicKey, first.agreementPublicKey),
     firstFingerprint,
   );
-  const forward = await safetyCodeBytes(firstFingerprint, secondFingerprint);
-  const reverse = await safetyCodeBytes(secondFingerprint, firstFingerprint);
+  const firstParticipant = {
+    userId: "first-user",
+    deviceId: callerDeviceId,
+    fingerprint: firstFingerprint,
+  };
+  const secondParticipant = {
+    userId: "second-user",
+    deviceId: calleeDeviceId,
+    fingerprint: secondFingerprint,
+  };
+  const forward = await safetyCodeBytes(firstParticipant, secondParticipant);
+  const reverse = await safetyCodeBytes(secondParticipant, firstParticipant);
   assert.deepEqual(forward, reverse);
   assert.match(formatSafetyCode(forward), /^\d{6}( \d{6}){4}$/);
+  assert.notDeepEqual(
+    forward,
+    await safetyCodeBytes({ ...firstParticipant, userId: "substituted-user" }, secondParticipant),
+  );
 });
 
 test("signal validation enforces exact phase schema, sizes, UUID, and answer offer binding", async () => {
@@ -197,6 +224,13 @@ test("signal validation enforces exact phase schema, sizes, UUID, and answer off
   });
   const offerHash = await signalEnvelopeHash(offer);
   assert.equal(base64UrlDecode(offerHash).byteLength, 32);
+  assert.equal(
+    await signalEnvelopeHash({
+      ...offer,
+      signature: base64UrlEncode(crypto.getRandomValues(new Uint8Array(64))),
+    }),
+    offerHash,
+  );
   assert.equal(validateSignalEnvelope({
     version: 1,
     sessionId,

@@ -33,15 +33,23 @@ The private keys are structured-cloned into IndexedDB and never serialized by
 the application. Echo's database stores only the matching public keys and a
 SHA-256 device fingerprint. The first connection to another user is trust on
 first use (TOFU). Echo pins that user's fingerprint locally, displays a shared
-safety code for out-of-band comparison, and blocks a changed key until the user
-explicitly replaces the pin.
+safety code bound to both account and device identities, and blocks a changed
+key until the user explicitly replaces the pin.
+
+For a new or changed device, this is a verification-first flow: Echo exposes a
+short-lived identity-only invitation with no SDP or ICE candidates. Each
+browser requires either its own saved trusted pin or a full out-of-band safety
+code comparison before it constructs or applies peer-connection details. A
+saved trusted pin retains the fast path. The code is not secret; its value
+comes from an independent comparison, not from clicking through the UI.
 
 The browser signs the complete SDP offer or answer, including WebRTC's DTLS
 fingerprint, before relaying it. The SDP and ICE candidates are encrypted with
 AES-256-GCM under an ECDH/HKDF-derived, direction-specific key. The session,
 participants, devices, fingerprints, direction, expiry, and offer/answer
 relationship are authenticated as associated data. WebRTC then encrypts the
-actual data channel with DTLS.
+actual data channel with DTLS. The answer binds authenticated offer content,
+not the malleable raw ECDSA signature encoding.
 
 This model protects message content from Echo, Vercel, Supabase, and a passive
 network observer. Its intentional limits are:
@@ -52,6 +60,9 @@ network observer. Its intentional limits are:
   browser cryptography application;
 - non-extractable keys reduce accidental export but do not defend against
   script already executing in the same origin;
+- the durable ECDH device key means a later compromise of that private key can
+  decrypt a captured, still-retained SDP/ICE envelope; it cannot recover a
+  direct WebRTC data-channel transcript;
 - the peer and the configured STUN provider can learn a user's IP and network
   addresses;
 - encrypted database pages may remain in provider backups or WAL after logical
@@ -64,10 +75,14 @@ No plaintext fallback exists.
 ## Signaling and retained data
 
 The existing Vercel application provides an authenticated, same-origin polling
-mailbox. It is signaling infrastructure, not a message service. It retains:
+mailbox. Reads are device-signed POSTs, so an Echo web-session cookie alone
+cannot fetch encrypted envelopes. It is signaling infrastructure, not a
+message service. It retains:
 
 - one public-key device registration and short online-presence timestamp per
   user;
+- at most one identity-only `CREATED` invitation per active peer pair, with no
+  SDP, ICE candidate, or encrypted envelope;
 - a server-generated session identifier and participant/device identifiers;
 - at most one opaque encrypted offer and one opaque encrypted answer;
 - creation and expiry timestamps.
@@ -75,8 +90,9 @@ mailbox. It is signaling infrastructure, not a message service. It retains:
 The client requests immediate deletion of encrypted offer/answer rows when a
 participant closes the session or the direct channel is established. If that
 request cannot reach Echo, the rows remain inaccessible after their original
-ten-minute expiry and are physically removed by normal mutation cleanup or the
-production minute-level database job. A closed session retains only its
+ten-minute expiry and are physically removed by the production minute-level
+database job. Request paths use indexed expiry checks and do not run global
+database cleanup work. A closed session retains only its
 non-content metadata tombstone through that expiry for rate-limiting and
 idempotency; it is never usable again.
 
@@ -84,6 +100,10 @@ Echo does not load Vercel Analytics or Speed Insights browser telemetry in this
 release. Deployment-platform request logs can still observe that a browser
 requested a messaging page or signaling endpoint; those logs receive neither
 message text nor plaintext SDP/ICE.
+
+Message pages and signaling responses are `private, no-store`. A page restored
+from the browser back/forward cache explicitly clears its live session and
+transcript before it can be used again.
 
 The legacy Signal experiment is separate. Its `/api/dm/*` routes remain `410
 Gone`; its existing tables are not read, migrated, or deleted by this feature.
@@ -99,6 +119,22 @@ explicit acceptance of all of the following:
 4. Echo relays encrypted connection metadata for no more than ten minutes;
 5. direct connection can fail because no relay is provided.
 
+Before the first direct network attempt with a new or changed device, the UI
+also requires the user to compare the five-group safety code outside Echo and
+explicitly confirm that comparison. Echo removes numeric host ICE candidates
+from relayed SDP; it replaces ICE related-address values with RFC 8839 privacy
+placeholders (`0.0.0.0`/`::` and port `9`), anonymizes the SDP origin, and
+replaces identifying SDP connection lines and default media port before relay;
+a receiver fails
+closed if it receives identifying connection data, non-global numeric
+candidates, unexpected hostnames, relay candidates, or remote-candidate
+attributes. This reduces accidental local-network address disclosure and
+blocks an authenticated peer from using SDP to direct numeric private-address
+ICE probes, but does not make direct mode anonymous. mDNS host candidates stay
+enabled for same-LAN compatibility, so an authenticated peer can still cause a
+local `.local` lookup. A peer still learns the working public or mDNS candidate
+needed to connect.
+
 The composer stays disabled until the peer's signature and SDP are valid, the
 fingerprint is trusted, and the data channel is open. Binary frames, unknown
 fields, invalid UUIDs, control characters other than tab/newline, oversized
@@ -113,7 +149,9 @@ key cannot be copied by the application. Users must expect a one-time identity
 reset and re-verify safety codes after the move. From Messages, they must
 explicitly confirm replacement of the prior browser device; that closes pending
 signaling sessions and changes their fingerprint. The Vercel origin should not
-be treated as a permanent cryptographic identity.
+be treated as a permanent cryptographic identity. A browser reset is not a
+proof of cryptographic continuity: stronger recovery needs an existing-device
+authorization or a separately protected recovery mechanism.
 
 ## Deployment and rollback
 
@@ -142,5 +180,6 @@ not part of rollback.
 - [RFC 8827: WebRTC security architecture](https://www.rfc-editor.org/rfc/rfc8827.html)
 - [RFC 8831: WebRTC data channels](https://www.rfc-editor.org/rfc/rfc8831.html)
 - [RFC 8828: WebRTC IP address privacy](https://www.rfc-editor.org/rfc/rfc8828.html)
+- [RFC 8839: ICE SDP and privacy placeholders](https://www.rfc-editor.org/rfc/rfc8839.html)
 - [IndexedDB origin and storage model](https://www.w3.org/TR/IndexedDB/)
 - [Cloudflare's public STUN service](https://developers.cloudflare.com/realtime/turn/)

@@ -87,7 +87,7 @@ export default function MessagesLobby({ userId, username }: { userId: string; us
         }
         const items = await readInbox(identity, controller.signal);
         if (!active) return;
-        const incoming = items.filter((item) => item.session.role === "callee" && item.signal.phase === "offer");
+        const incoming = items.filter((item) => item.session.role === "callee");
         setInbox(incoming);
         pollDelay = incoming.length > 0
           ? POLL_INTERVAL_MS
@@ -248,7 +248,10 @@ export default function MessagesLobby({ userId, username }: { userId: string; us
               <li key={session.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/5 p-3">
                 <div>
                   <div className="font-semibold">@{session.peer.username}</div>
-                  <div className="text-xs text-white/55">Expires {new Date(session.expiresAt).toLocaleTimeString()}</div>
+                  <div className="text-xs text-white/55">
+                    {session.state === "created" ? "Safety-code check requested" : "Ready to review"}
+                    {" · "}expires {new Date(session.expiresAt).toLocaleTimeString()}
+                  </div>
                 </div>
                 <Link
                   prefetch={false}

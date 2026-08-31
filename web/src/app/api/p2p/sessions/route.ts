@@ -7,12 +7,13 @@ import {
 import {
   P2PHttpError,
   assertBodyKeys,
-  cleanupExpiredP2P,
   p2pErrorResponse,
   p2pJson,
   p2pPairKey,
   parseStoredPublicKey,
+  lockP2PDeviceRows,
   readP2PJson,
+  requireCurrentLockedP2PDevice,
   requireOwnedDevice,
   requireP2PMutation,
   rtcSessionInclude,
@@ -42,28 +43,8 @@ export async function POST(req: Request) {
       body.signature,
     );
 
-    await cleanupExpiredP2P();
     const now = new Date();
     const session = await withSerializableRetry(async (transaction) => {
-      const duplicate = await transaction.rtcSession.findUnique({
-        where: {
-          callerDeviceId_createRequestId: {
-            callerDeviceId: callerDevice.id,
-            createRequestId: requestId,
-          },
-        },
-        include: rtcSessionInclude,
-      });
-      if (duplicate) {
-        if (
-          duplicate.state === "CLOSED" ||
-          duplicate.callee.username?.toLowerCase() !== targetUsername
-        ) {
-          throw new P2PHttpError(409, "request_conflict");
-        }
-        return duplicate;
-      }
-
       const targets = await transaction.user.findMany({
         where: {
           id: { not: user.id },
@@ -81,15 +62,60 @@ export async function POST(req: Request) {
       if (!target?.username || !target.rtcDevice?.onlineUntil || target.rtcDevice.onlineUntil <= now) {
         throw new P2PHttpError(409, "peer_unavailable");
       }
+      // Lock both rows before reading their current key material or creating
+      // a session. Device replacement holds the same lock before it closes
+      // pending sessions, so an old browser proof cannot win the race and
+      // create a post-replacement invitation.
+      await lockP2PDeviceRows(transaction, [callerDevice.id, target.rtcDevice.id]);
+      const currentCallerDevice = await requireCurrentLockedP2PDevice(transaction, callerDevice);
+      const currentTargetDevice = await transaction.rtcDevice.findUnique({
+        where: { id: target.rtcDevice.id },
+      });
+      if (
+        !currentTargetDevice ||
+        currentTargetDevice.userId !== target.id ||
+        !currentTargetDevice.onlineUntil ||
+        currentTargetDevice.onlineUntil <= now
+      ) {
+        throw new P2PHttpError(409, "peer_unavailable");
+      }
+
+      const duplicate = await transaction.rtcSession.findUnique({
+        where: {
+          callerDeviceId_createRequestId: {
+            callerDeviceId: currentCallerDevice.id,
+            createRequestId: requestId,
+          },
+        },
+        include: rtcSessionInclude,
+      });
+      if (duplicate) {
+        if (duplicate.expiresAt <= now) {
+          await transaction.rtcSession.delete({ where: { id: duplicate.id } });
+        } else if (
+          duplicate.state === "CLOSED" ||
+          duplicate.callee.username?.toLowerCase() !== targetUsername
+        ) {
+          throw new P2PHttpError(409, "request_conflict");
+        } else {
+          return duplicate;
+        }
+      }
 
       const pairKey = p2pPairKey(user.id, target.id);
+      // The production cron job owns global expiry cleanup. Do only the
+      // narrowly necessary deletion here so an expired row for this pair
+      // cannot keep the active-pair uniqueness constraint occupied.
+      await transaction.rtcSession.deleteMany({
+        where: { pairKey, expiresAt: { lte: now } },
+      });
       const recoverable = await transaction.rtcSession.findFirst({
         where: {
           pairKey,
           callerUserId: user.id,
-          callerDeviceId: callerDevice.id,
+          callerDeviceId: currentCallerDevice.id,
           calleeUserId: target.id,
-          calleeDeviceId: target.rtcDevice.id,
+          calleeDeviceId: currentTargetDevice.id,
           state: { not: "CLOSED" },
           expiresAt: { gt: now },
         },
@@ -143,8 +169,8 @@ export async function POST(req: Request) {
         data: {
           callerUserId: user.id,
           calleeUserId: target.id,
-          callerDeviceId: callerDevice.id,
-          calleeDeviceId: target.rtcDevice.id,
+          callerDeviceId: currentCallerDevice.id,
+          calleeDeviceId: currentTargetDevice.id,
           createRequestId: requestId,
           pairKey,
           expiresAt: new Date(now.getTime() + P2P_SESSION_TTL_MS),

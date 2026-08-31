@@ -3,10 +3,12 @@ import { P2P_PRESENCE_TTL_MS } from "@/lib/p2p/config";
 import { presenceSigningBytes } from "@/lib/p2p/protocol";
 import {
   assertBodyKeys,
+  lockP2PDeviceRows,
   p2pErrorResponse,
   p2pJson,
   parseStoredPublicKey,
   readP2PJson,
+  requireCurrentLockedP2PDevice,
   requireOwnedDevice,
   requireP2PMutation,
   validateIssuedAt,
@@ -30,18 +32,22 @@ export async function POST(req: Request) {
     if (onlineUntil.getTime() <= Date.now()) {
       return p2pJson({ error: "stale_device_proof" }, { status: 403 });
     }
-    await prisma.rtcDevice.updateMany({
-      where: {
-        id: device.id,
-        userId: user.id,
-        OR: [
-          { onlineUntil: null },
-          { onlineUntil: { lt: onlineUntil } },
-        ],
-      },
-      data: { onlineUntil },
+    const current = await prisma.$transaction(async (transaction) => {
+      await lockP2PDeviceRows(transaction, [device.id]);
+      const lockedDevice = await requireCurrentLockedP2PDevice(transaction, device);
+      await transaction.rtcDevice.updateMany({
+        where: {
+          id: lockedDevice.id,
+          userId: user.id,
+          OR: [
+            { onlineUntil: null },
+            { onlineUntil: { lt: onlineUntil } },
+          ],
+        },
+        data: { onlineUntil },
+      });
+      return transaction.rtcDevice.findUniqueOrThrow({ where: { id: lockedDevice.id } });
     });
-    const current = await prisma.rtcDevice.findUniqueOrThrow({ where: { id: device.id } });
     return p2pJson({ onlineUntil: current.onlineUntil?.toISOString() ?? onlineUntil.toISOString() });
   } catch (error) {
     return p2pErrorResponse(error);

@@ -10,11 +10,12 @@ import {
   P2PHttpError,
   assertBodyKeys,
   canonicalDeviceKeyStorage,
-  cleanupExpiredP2P,
   deviceIdentity,
   p2pErrorResponse,
   p2pJson,
   readP2PJson,
+  lockP2PDeviceRows,
+  requireCurrentLockedP2PDevice,
   requireP2PMutation,
   requireString,
   validateIssuedAt,
@@ -64,8 +65,7 @@ export async function PUT(req: Request) {
     const fingerprint = await deviceFingerprint(signingPublicKey, agreementPublicKey);
     const signingKeyJson = canonicalDeviceKeyStorage(signingPublicKey);
     const agreementKeyJson = canonicalDeviceKeyStorage(agreementPublicKey);
-    await cleanupExpiredP2P();
-
+    const now = new Date();
     const result = await prisma.$transaction(async (transaction) => {
       const existing = await transaction.rtcDevice.findUnique({ where: { userId: user.id } });
       if (!existing) {
@@ -82,13 +82,15 @@ export async function PUT(req: Request) {
         });
         return { device, replaced: false };
       }
-      if (requestedDeviceId && requestedDeviceId !== existing.id) {
+      await lockP2PDeviceRows(transaction, [existing.id]);
+      const lockedExisting = await requireCurrentLockedP2PDevice(transaction, existing);
+      if (requestedDeviceId && requestedDeviceId !== lockedExisting.id) {
         throw new P2PHttpError(404, "not_found");
       }
 
-      const keysChanged = existing.fingerprint !== fingerprint ||
-        existing.signingPublicKey !== signingKeyJson ||
-        existing.agreementPublicKey !== agreementKeyJson;
+      const keysChanged = lockedExisting.fingerprint !== fingerprint ||
+        lockedExisting.signingPublicKey !== signingKeyJson ||
+        lockedExisting.agreementPublicKey !== agreementKeyJson;
       if (keysChanged && !replaceExisting) {
         throw new P2PHttpError(409, "device_replacement_confirmation_required");
       }
@@ -98,9 +100,14 @@ export async function PUT(req: Request) {
         await transaction.rtcSession.updateMany({
           where: {
             state: { not: "CLOSED" },
+            // The database only permits CLOSED timestamps at or before the
+            // original expiry. The cron worker owns expired-row deletion, so
+            // leave an already expired row untouched while still purging its
+            // encrypted signaling below.
+            expiresAt: { gt: now },
             OR: [{ callerUserId: user.id }, { calleeUserId: user.id }],
           },
-          data: { state: "CLOSED", closedAt: new Date() },
+          data: { state: "CLOSED", closedAt: now },
         });
         await transaction.rtcSignal.deleteMany({
           where: {
@@ -111,7 +118,7 @@ export async function PUT(req: Request) {
         });
       }
       const device = await transaction.rtcDevice.update({
-        where: { id: existing.id },
+        where: { id: lockedExisting.id },
         data: {
           signingPublicKey: signingKeyJson,
           agreementPublicKey: agreementKeyJson,

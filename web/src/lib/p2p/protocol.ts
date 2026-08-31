@@ -61,6 +61,11 @@ export type DeviceIdentity = {
   fingerprint: string;
 };
 
+export type SafetyCodeParticipant = Pick<
+  DeviceIdentity,
+  "deviceId" | "userId" | "fingerprint"
+>;
+
 export class P2PProtocolError extends TypeError {
   constructor(message: string) {
     super(message);
@@ -262,15 +267,36 @@ export async function deviceFingerprint(
   return Array.from(digest, (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
-export async function safetyCodeBytes(
-  firstFingerprint: string,
-  secondFingerprint: string,
-): Promise<ProtocolBytes> {
-  if (!FINGERPRINT_PATTERN.test(firstFingerprint) || !FINGERPRINT_PATTERN.test(secondFingerprint)) {
-    throw new P2PProtocolError("Invalid device fingerprint.");
+function safetyCodeParticipantBinding(participant: SafetyCodeParticipant): string {
+  if (
+    typeof participant.userId !== "string" ||
+    participant.userId.length === 0 ||
+    participant.userId.length > 128 ||
+    !FINGERPRINT_PATTERN.test(participant.fingerprint)
+  ) {
+    throw new P2PProtocolError("Invalid safety-code participant.");
   }
-  const ordered = [firstFingerprint, secondFingerprint].sort();
-  return sha256(canonicalFields("echo-p2p-safety-code-v1", ordered[0], ordered[1]));
+  return JSON.stringify({
+    deviceId: assertUuid(participant.deviceId, "deviceId"),
+    fingerprint: participant.fingerprint,
+    userId: participant.userId,
+  });
+}
+
+/**
+ * A short-authentication string for a precise pair of Echo identities. Binding
+ * both account and device identifiers prevents an unknown-key-share display in
+ * which an otherwise valid device key is relabelled as a different account.
+ */
+export async function safetyCodeBytes(
+  first: SafetyCodeParticipant,
+  second: SafetyCodeParticipant,
+): Promise<ProtocolBytes> {
+  const ordered = [
+    safetyCodeParticipantBinding(first),
+    safetyCodeParticipantBinding(second),
+  ].sort();
+  return sha256(canonicalFields("echo-p2p-safety-code-v2", ordered[0], ordered[1]));
 }
 
 export function formatSafetyCode(bytes: Uint8Array<ArrayBufferLike>): string {
@@ -307,6 +333,19 @@ export function presenceSigningBytes(input: {
   issuedAt: string;
 }): ProtocolBytes {
   return canonicalFields("echo-p2p-presence-v1", input.deviceId, input.issuedAt);
+}
+
+export function inboxSigningBytes(input: {
+  deviceId: string;
+  requestId: string;
+  issuedAt: string;
+}): ProtocolBytes {
+  return canonicalFields(
+    "echo-p2p-read-inbox-v1",
+    input.deviceId,
+    input.requestId,
+    input.issuedAt,
+  );
 }
 
 export function createSessionSigningBytes(input: {
@@ -455,16 +494,21 @@ export function validateSignalEnvelope(input: unknown): SignalEnvelope {
 
 export async function signalEnvelopeHash(envelope: SignalEnvelope): Promise<string> {
   const normalized = validateSignalEnvelope(envelope);
+  if (normalized.phase !== "offer") {
+    throw new P2PProtocolError("Only offers can be bound to an answer.");
+  }
+  // The offer is independently authenticated by its ECDSA signature. Do not
+  // include the raw signature in this binding: ECDSA permits mathematically
+  // equivalent high-S encodings, which could otherwise turn a harmless
+  // signature normalization into an answer-binding denial of service.
   return base64UrlEncode(await sha256(canonicalFields(
-    "echo-p2p-signal-envelope-hash-v1",
+    "echo-p2p-offer-binding-v2",
     String(normalized.version),
     normalized.sessionId,
     normalized.phase,
     String(normalized.sequence),
     normalized.iv,
     normalized.ciphertext,
-    normalized.offerHash ?? "",
-    normalized.signature,
   )));
 }
 

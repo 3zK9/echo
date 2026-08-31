@@ -64,6 +64,13 @@ type RoomPhase =
 
 type TranscriptItem = TextFrame & { direction: "sent" | "received" };
 
+type PendingNegotiation = {
+  identity: BrowserIdentity;
+  session: ClientSession;
+  signal: AbortSignal;
+  run: number;
+};
+
 type PeerSummary = {
   userId: string;
   username: string;
@@ -126,7 +133,7 @@ function connectionStatus(phase: RoomPhase, peer: string): string {
     case "waiting": return `Waiting for @${peer} to answer…`;
     case "negotiating": return "Authenticating encrypted connection details…";
     case "connecting": return "Attempting a direct, STUN-only connection…";
-    case "verifying": return "Direct connection open; trust the device before sending.";
+    case "verifying": return "Compare and confirm the device safety code before Echo starts a direct connection.";
     case "connected": return "Direct connection open. Messages are not being stored.";
     case "ended": return "The direct connection ended. Its messages were cleared.";
     case "failed": return "The direct connection failed.";
@@ -145,7 +152,7 @@ export default function LiveRoom({
   const [failure, setFailure] = useState<string | null>(null);
   const [safetyCode, setSafetyCode] = useState<string | null>(null);
   const [pinStatus, setPinStatus] = useState<PinStatus | null>(null);
-  const [peerAuthenticated, setPeerAuthenticated] = useState(false);
+  const [safetyCompared, setSafetyCompared] = useState(false);
   const [trusted, setTrusted] = useState(false);
   const [channelOpen, setChannelOpen] = useState(false);
   const [draft, setDraft] = useState("");
@@ -170,6 +177,7 @@ export default function LiveRoom({
   const receivedIdsRef = useRef(new Set<string>());
   const receivedIdOrderRef = useRef<string[]>([]);
   const trustedRef = useRef(false);
+  const pendingNegotiationRef = useRef<PendingNegotiation | null>(null);
   const preparedCloseRef = useRef<PreparedCloseRequest | null>(null);
   const signalingPurgedRef = useRef(false);
 
@@ -220,6 +228,7 @@ export default function LiveRoom({
       signalingPurgedRef.current = true;
     }
     sessionRef.current = null;
+    pendingNegotiationRef.current = null;
     receiveTimesRef.current = [];
     receivedIdsRef.current.clear();
     receivedIdOrderRef.current = [];
@@ -229,7 +238,7 @@ export default function LiveRoom({
       setDraft("");
       setSafetyCode(null);
       setPinStatus(null);
-      setPeerAuthenticated(false);
+      setSafetyCompared(false);
       setTrusted(false);
       trustedRef.current = false;
     }
@@ -380,9 +389,10 @@ export default function LiveRoom({
         const item = items.find((candidate) =>
           candidate.session.id === session.id &&
           candidate.session.peer.userId === session.peer.userId &&
-          candidate.signal.phase === phaseToFind,
+          candidate.signal?.phase === phaseToFind,
         );
-        if (item) return item.signal;
+        const envelope = item?.signal;
+        if (envelope?.phase === phaseToFind) return envelope;
         transientFailures = 0;
         pollDelay = Math.min(MAX_POLL_INTERVAL_MS, Math.ceil(pollDelay * 1.7));
       } catch (error) {
@@ -399,17 +409,22 @@ export default function LiveRoom({
     throw new DOMException("Aborted", "AbortError");
   }, []);
 
-  const preparePeerTrust = useCallback(async (session: ClientSession) => {
+  const preparePeerTrust = useCallback(async (
+    session: ClientSession,
+    run: number,
+    signal: AbortSignal,
+  ): Promise<PinStatus | null> => {
     const [status, codeBytes] = await Promise.all([
       peerPinStatus(session.peer.userId, session.peer.deviceId, session.peer.fingerprint),
-      safetyCodeBytes(session.self.fingerprint, session.peer.fingerprint),
+      safetyCodeBytes(session.self, session.peer),
     ]);
+    if (!mountedRef.current || run !== runRef.current || signal.aborted) return null;
     const code = formatSafetyCode(codeBytes);
-    if (!mountedRef.current) return;
     setPinStatus(status);
     setSafetyCode(code);
     trustedRef.current = status.status === "trusted";
     setTrusted(status.status === "trusted");
+    return status;
   }, []);
 
   const beginHeartbeat = useCallback((identity: BrowserIdentity) => {
@@ -428,11 +443,19 @@ export default function LiveRoom({
     }, HEARTBEAT_INTERVAL_MS);
   }, []);
 
+  const assertNegotiationActive = useCallback((run: number, signal: AbortSignal) => {
+    if (run !== runRef.current || signal.aborted || closingRef.current) {
+      throw new DOMException("Aborted", "AbortError");
+    }
+  }, []);
+
   const runCaller = useCallback(async (
     identity: BrowserIdentity,
     session: ClientSession,
     signal: AbortSignal,
+    run: number,
   ) => {
+    assertNegotiationActive(run, signal);
     const connection = createPeerConnection();
     attachConnection(connection);
     connection.ondatachannel = (event) => {
@@ -442,32 +465,48 @@ export default function LiveRoom({
     const channel = createInitiatorDataChannel(connection);
     attachChannel(channel);
     const offer = await connection.createOffer();
+    assertNegotiationActive(run, signal);
     await connection.setLocalDescription(offer);
     const gatheredOffer = await waitForIceGathering(connection);
+    assertNegotiationActive(run, signal);
     const offerEnvelope = await sealSessionDescription(identity, session, "offer", gatheredOffer);
+    assertNegotiationActive(run, signal);
     await postSignalEnvelope(session.id, offerEnvelope, signal);
+    assertNegotiationActive(run, signal);
     if (mountedRef.current) setPhase("waiting");
 
     const answerEnvelope = await waitForSignal(identity, session, "answer", signal);
+    assertNegotiationActive(run, signal);
     if (mountedRef.current) setPhase("negotiating");
     const offerHash = await signalEnvelopeHash(offerEnvelope);
     const answer = await openSessionDescription(identity, session, answerEnvelope, "answer", offerHash);
-    if (mountedRef.current) setPeerAuthenticated(true);
+    assertNegotiationActive(run, signal);
     await connection.setRemoteDescription({ type: answer.type, sdp: answer.sdp });
     assertNoMediaReceivers(connection);
     if (mountedRef.current) setPhase("connecting");
-  }, [assertNoMediaReceivers, attachChannel, attachConnection, fail, waitForSignal]);
+  }, [assertNegotiationActive, assertNoMediaReceivers, attachChannel, attachConnection, fail, waitForSignal]);
 
   const runCallee = useCallback(async (
     identity: BrowserIdentity,
     session: ClientSession,
     signal: AbortSignal,
+    run: number,
   ) => {
+    assertNegotiationActive(run, signal);
     if (mountedRef.current) setPhase("waiting");
     const offerEnvelope = await waitForSignal(identity, session, "offer", signal);
+    assertNegotiationActive(run, signal);
     if (mountedRef.current) setPhase("negotiating");
-    const offer = await openSessionDescription(identity, session, offerEnvelope, "offer");
-    if (mountedRef.current) setPeerAuthenticated(true);
+    // A callee may have opened the CREATED identity-check invitation before
+    // the caller posted an offer. Claim only after that offer is present, then
+    // continue with the same already verified device identities.
+    const claimedSession = session.state === "claimed"
+      ? session
+      : await claimLiveSession(identity, session.id, signal);
+    assertNegotiationActive(run, signal);
+    sessionRef.current = claimedSession;
+    const offer = await openSessionDescription(identity, claimedSession, offerEnvelope, "offer");
+    assertNegotiationActive(run, signal);
 
     const connection = createPeerConnection();
     attachConnection(connection);
@@ -477,17 +516,42 @@ export default function LiveRoom({
     const answer = await connection.createAnswer();
     await connection.setLocalDescription(answer);
     const gatheredAnswer = await waitForIceGathering(connection);
+    assertNegotiationActive(run, signal);
     const offerHash = await signalEnvelopeHash(offerEnvelope);
-    const answerEnvelope = await sealSessionDescription(identity, session, "answer", gatheredAnswer, offerHash);
-    await postSignalEnvelope(session.id, answerEnvelope, signal);
+    const answerEnvelope = await sealSessionDescription(identity, claimedSession, "answer", gatheredAnswer, offerHash);
+    assertNegotiationActive(run, signal);
+    await postSignalEnvelope(claimedSession.id, answerEnvelope, signal);
     if (mountedRef.current) setPhase("connecting");
-  }, [assertNoMediaReceivers, attachChannel, attachConnection, waitForSignal]);
+  }, [assertNegotiationActive, assertNoMediaReceivers, attachChannel, attachConnection, waitForSignal]);
+
+  const beginNegotiation = useCallback(async (pending: PendingNegotiation) => {
+    const { identity, session, signal, run } = pending;
+    try {
+      if (run !== runRef.current || signal.aborted || closingRef.current) return;
+      if (session.role === "caller") {
+        await runCaller(identity, session, signal, run);
+      } else {
+        await runCallee(identity, session, signal, run);
+      }
+      if (run !== runRef.current || signal.aborted || closingRef.current) return;
+      window.clearTimeout(connectTimeoutRef.current);
+      connectTimeoutRef.current = window.setTimeout(() => {
+        if (channelRef.current?.readyState !== "open") {
+          fail("A direct STUN-only connection could not be established on these networks.");
+        }
+      }, CONNECT_TIMEOUT_MS);
+    } catch (error) {
+      if (signal.aborted || run !== runRef.current ||
+          (error instanceof DOMException && error.name === "AbortError")) return;
+      fail(replacePeerPlaceholder(describeFailure(error), peer.username));
+    }
+  }, [fail, peer.username, runCallee, runCaller]);
 
   const start = useCallback(async () => {
     const run = ++runRef.current;
     closingRef.current = false;
     setFailure(null);
-    setPeerAuthenticated(false);
+    setSafetyCompared(false);
     setPinStatus(null);
     setSafetyCode(null);
     setTrusted(false);
@@ -510,12 +574,13 @@ export default function LiveRoom({
       const inbox = await readInbox(registered.identity, controller.signal);
       const incoming = inbox.find((item) =>
         item.session.role === "callee" &&
-        item.session.peer.userId === peer.userId &&
-        item.signal.phase === "offer",
+        item.session.peer.userId === peer.userId,
       );
       let session: ClientSession;
       if (incoming) {
-        session = await claimLiveSession(registered.identity, incoming.session.id, controller.signal);
+        session = incoming.signal?.phase === "offer"
+          ? await claimLiveSession(registered.identity, incoming.session.id, controller.signal)
+          : incoming.session;
       } else {
         try {
           session = await createLiveSession(registered.identity, peer.username, controller.signal);
@@ -527,24 +592,25 @@ export default function LiveRoom({
           ].includes(error.code);
           if (!conflict) throw error;
           // If both people initiate at once, the database admits one session.
-          // Its caller can take up to the bounded ICE-gathering interval before
-          // it publishes the offer, so poll long enough for that offer rather
-          // than treating a 600 ms race as a connection failure.
+          // The callee can now see its CREATED identity-check invitation before
+          // SDP exists, so wait for that bounded pre-connection state rather
+          // than treating the collision as a connection failure.
           const deadline = Date.now() + CROSSED_OFFER_WAIT_MS;
           let racedIncoming: Awaited<ReturnType<typeof readInbox>>[number] | undefined;
           while (!racedIncoming && Date.now() < deadline) {
             const refreshed = await readInbox(registered.identity, controller.signal);
             racedIncoming = refreshed.find((item) =>
               item.session.role === "callee" &&
-              item.session.peer.userId === peer.userId &&
-              item.signal.phase === "offer",
+              item.session.peer.userId === peer.userId,
             );
             if (!racedIncoming && Date.now() < deadline) {
               await delay(Math.min(POLL_INTERVAL_MS, deadline - Date.now()), controller.signal);
             }
           }
           if (!racedIncoming) throw error;
-          session = await claimLiveSession(registered.identity, racedIncoming.session.id, controller.signal);
+          session = racedIncoming.signal?.phase === "offer"
+            ? await claimLiveSession(registered.identity, racedIncoming.session.id, controller.signal)
+            : racedIncoming.session;
         }
       }
       if (run !== runRef.current || controller.signal.aborted) return;
@@ -556,60 +622,93 @@ export default function LiveRoom({
       }
       sessionRef.current = session;
       preparedCloseRef.current = await prepareCloseLiveSession(registered.identity, session.id);
-      await preparePeerTrust(session);
+      const pin = await preparePeerTrust(session, run, controller.signal);
+      if (!pin || run !== runRef.current || controller.signal.aborted) return;
       beginHeartbeat(registered.identity);
-
-      if (session.role === "caller") {
-        await runCaller(registered.identity, session, controller.signal);
+      const pending: PendingNegotiation = {
+        identity: registered.identity,
+        session,
+        signal: controller.signal,
+        run,
+      };
+      if (pin.status === "trusted") {
+        await beginNegotiation(pending);
       } else {
-        await runCallee(registered.identity, session, controller.signal);
+        // No offer, ICE candidate gathering, remote SDP application, or answer
+        // creation occurs until the human has compared the safety code outside
+        // Echo and explicitly continues.
+        pendingNegotiationRef.current = pending;
+        if (mountedRef.current) setPhase("verifying");
       }
-      if (run !== runRef.current || controller.signal.aborted) return;
-      window.clearTimeout(connectTimeoutRef.current);
-      connectTimeoutRef.current = window.setTimeout(() => {
-        if (channelRef.current?.readyState !== "open") {
-          fail("A direct STUN-only connection could not be established on these networks.");
-        }
-      }, CONNECT_TIMEOUT_MS);
     } catch (error) {
       if (controller.signal.aborted || run !== runRef.current ||
           (error instanceof DOMException && error.name === "AbortError")) return;
       fail(replacePeerPlaceholder(describeFailure(error), peer.username));
     }
   }, [
+    beginNegotiation,
     beginHeartbeat,
     fail,
     peer.userId,
     peer.username,
     preparePeerTrust,
-    runCallee,
-    runCaller,
     selfUserId,
   ]);
 
   useEffect(() => {
     mountedRef.current = true;
-    const pageHide = () => closeTransport(true);
+    const pageHide = () => {
+      runRef.current += 1;
+      closeTransport(true);
+    };
+    const pageShow = (event: PageTransitionEvent) => {
+      if (!event.persisted) return;
+      // A restored back/forward-cache snapshot must never revive a transcript
+      // or a direct transport from before the page was hidden.
+      runRef.current += 1;
+      closeTransport(true);
+      setFailure("This live session was cleared after browser history restoration.");
+      setPhase("ended");
+    };
     window.addEventListener("pagehide", pageHide);
+    window.addEventListener("pageshow", pageShow);
     return () => {
       mountedRef.current = false;
       runRef.current += 1;
       window.removeEventListener("pagehide", pageHide);
+      window.removeEventListener("pageshow", pageShow);
       closeTransport(true);
     };
   }, [closeTransport]);
 
   const acceptPeer = async () => {
     const session = sessionRef.current;
-    if (!session || !peerAuthenticated) return;
+    const pending = pendingNegotiationRef.current;
+    if (!session || !pending || pending.session.id !== session.id || !safetyCompared) return;
+    // Claim this one-shot work item before any asynchronous IndexedDB call so
+    // a double-click or key repeat cannot launch two peer connections.
+    pendingNegotiationRef.current = null;
+    setSafetyCompared(false);
     try {
-      await trustPeer(session.peer.userId, session.peer.deviceId, session.peer.fingerprint);
+      const savedPin = await trustPeer(
+        session.peer.userId,
+        session.peer.deviceId,
+        session.peer.fingerprint,
+      );
+      if (
+        pending.run !== runRef.current || pending.signal.aborted || closingRef.current ||
+        sessionRef.current?.id !== session.id
+      ) return;
+      if (pending.run !== runRef.current || pending.signal.aborted || closingRef.current) return;
       trustedRef.current = true;
       setTrusted(true);
-      setPinStatus(await peerPinStatus(session.peer.userId, session.peer.deviceId, session.peer.fingerprint));
-      if (channelRef.current?.readyState === "open") setPhase("connected");
+      setPinStatus({ status: "trusted", pin: savedPin });
+      void beginNegotiation(pending);
     } catch {
-      setFailure("This browser could not save the trusted device fingerprint.");
+      if (pending.run === runRef.current && !pending.signal.aborted && !closingRef.current) {
+        pendingNegotiationRef.current = pending;
+        setFailure("This browser could not save the trusted device fingerprint.");
+      }
     }
   };
 
@@ -684,7 +783,7 @@ export default function LiveRoom({
             <div>
               <h2 id="safety-code-heading" className="font-semibold">Device safety code</h2>
               <p className="mt-1 text-sm text-white/60">
-                Compare this code with @{peer.username} outside Echo. Matching codes help detect a signaling-server impersonation.
+                Compare every group with @{peer.username} outside Echo. This code is not secret; an independent match helps detect a signaling-server impersonation.
               </p>
             </div>
             <span className={`rounded-full border px-2.5 py-1 text-xs ${trusted ? "border-emerald-400/30 text-emerald-200" : pinStatus?.status === "changed" ? "border-red-400/40 text-red-200" : "border-amber-400/40 text-amber-200"}`}>
@@ -703,15 +802,26 @@ export default function LiveRoom({
               ) : (
                 <p className="text-sm text-amber-100">This is the first time this browser has seen @{peer.username}&apos;s device.</p>
               )}
+              <p className="mt-3 text-sm text-white/75">
+                Echo will not create or apply connection details until you confirm an out-of-band comparison. This prevents an unverified device from receiving a direct-network attempt.
+              </p>
+              <label className="mt-3 flex cursor-pointer items-start gap-2 text-xs text-white/85">
+                <input
+                  type="checkbox"
+                  checked={safetyCompared}
+                  onChange={(event) => setSafetyCompared(event.target.checked)}
+                  className="mt-0.5 h-4 w-4"
+                />
+                <span>I compared all five groups with @{peer.username} outside Echo.</span>
+              </label>
               <button
                 type="button"
                 onClick={() => void acceptPeer()}
-                disabled={!peerAuthenticated}
+                disabled={!safetyCompared || !pendingNegotiationRef.current}
                 className="mt-3 rounded-full border border-white/20 px-4 py-2 text-sm font-semibold hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {pinStatus?.status === "changed" ? "Forget old device and trust this one" : "Trust this device"}
+                {pinStatus?.status === "changed" ? "Replace trusted device and continue" : "Trust device and continue"}
               </button>
-              {!peerAuthenticated && <p className="mt-2 text-xs text-white/55">Waiting for the device to prove it owns the signing key…</p>}
             </div>
           )}
         </section>
