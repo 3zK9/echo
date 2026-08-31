@@ -60,8 +60,8 @@ The app lives under `web/`.
 
 3) Create a Supabase project (Postgres)
 
-- In Supabase, create a new project and get the `Connection string` (use the pooled connection for serverless if available).
-- Copy the URL as your `DATABASE_URL`.
+- In Supabase, create a new project and get both pooled and direct connection strings.
+- Use the pooled connection as `DATABASE_URL` and the direct connection as `DIRECT_URL`.
 
 4) Configure environment
 
@@ -71,14 +71,15 @@ The app lives under `web/`.
   - `AUTH_GITHUB_SECRET` — GitHub OAuth Client Secret
   - `AUTH_TRUST_HOST=true`
   - `DATABASE_URL` — your local Postgres (or Supabase) connection string
+  - `DIRECT_URL` — a direct Postgres connection used by Prisma migrations
 
-Important: Prisma CLI reads from `web/.env`. Create `web/.env` with at least `DATABASE_URL=...` (and optionally `DIRECT_URL=...`).
+Important: Prisma CLI reads from `web/.env`. Create `web/.env` with both `DATABASE_URL=...` and `DIRECT_URL=...` before running migrations.
 
 5) (First time) Initialize Prisma
 
 - From `web/`:
   - `npm run prisma:generate`
-  - Ensure `web/.env` contains `DATABASE_URL=...`
+  - Ensure `web/.env` contains `DATABASE_URL=...` and `DIRECT_URL=...`
   - `npm run prisma:migrate -- -n init`
 
 If you accidentally named it `DATABASE_URI`:
@@ -106,6 +107,7 @@ Local (web/.env.local)
 - `AUTH_GITHUB_ID`, `AUTH_GITHUB_SECRET`
 - `AUTH_TRUST_HOST=true`
 - `DATABASE_URL` — your Postgres URL (in `web/.env` for Prisma CLI)
+- `DIRECT_URL` — a direct Postgres URL used by Prisma migrations
 
 Production (Vercel → Project → Settings → Environment Variables)
 - `NEXTAUTH_URL=https://your-domain.tld`
@@ -135,6 +137,7 @@ Never commit real secrets. Use the provided `.gitignore` rules and keep `.env.lo
 
 - Remote images are allowed for GitHub avatars and DiceBear via `next.config.ts`.
 - Vercel caching requires explicit `prisma generate` in the build (handled in `vercel.json`).
+- Database migrations are intentionally separate from the Vercel build so database connectivity cannot leave a deployment blocked after its code has compiled.
 - Route handlers in Next 15 accept `{ params: Promise<...> }` — see API files for the current typing pattern.
 
 ---
@@ -145,8 +148,10 @@ Questions or want me to wire up a minimal backend to persist echoes and bios? Ha
 
 - Root Directory: `web/`
 - vercel.json build steps:
-  - `npm run prisma:generate && if [ "$VERCEL_ENV" = "production" ]; then npm run prisma:deploy; fi && npm run build`
+  - `npm run prisma:generate && npm run build`
 - Install Command: `npm ci`
+
+When a release includes new files under `web/prisma/migrations/`, run `npm run prisma:deploy` from `web/` as a controlled release step before deploying the application. This command requires both `DATABASE_URL` and `DIRECT_URL`.
 
 Environment (Production): see “Environment Variables” above.
 
