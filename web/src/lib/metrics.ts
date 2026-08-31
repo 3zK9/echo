@@ -30,6 +30,14 @@ type DailyActivityRow = {
   likes: bigint | number;
 };
 
+type P2PMessagingHealthRow = {
+  registeredDevices: bigint | number;
+  onlineDevices: bigint | number;
+  activeSessions: bigint | number;
+  encryptedSignals: bigint | number;
+  expiredSessionBacklog: bigint | number;
+};
+
 export interface ProductTotals {
   users: number;
   originalEchoes: number;
@@ -50,9 +58,18 @@ export interface DailyActivity {
   likes: number;
 }
 
+export interface P2PMessagingHealth {
+  registeredDevices: number;
+  onlineDevices: number;
+  activeSessions: number;
+  encryptedSignals: number;
+  expiredSessionBacklog: number;
+}
+
 export interface AdminProductMetrics {
   totals: ProductTotals;
   daily: DailyActivity[];
+  messaging: P2PMessagingHealth;
   generatedAt: string;
   windowDays: number;
 }
@@ -125,8 +142,19 @@ export async function loadAdminProductMetrics(): Promise<AdminProductMetrics> {
     LIMIT ${METRICS_WINDOW_DAYS}
   `;
 
+  const messagingRows = await client.$queryRaw<P2PMessagingHealthRow[]>`
+    SELECT
+      "registeredDevices",
+      "onlineDevices",
+      "activeSessions",
+      "encryptedSignals",
+      "expiredSessionBacklog"
+    FROM "AdminP2PMessagingHealth"
+  `;
+
   const totals = totalsRows[0];
-  if (!totals) throw new Error("AdminProductTotals returned no rows.");
+  const messaging = messagingRows[0];
+  if (!totals || !messaging) throw new Error("An admin aggregate view returned no rows.");
 
   return {
     totals: {
@@ -147,6 +175,13 @@ export async function loadAdminProductMetrics(): Promise<AdminProductMetrics> {
       reposts: safeCount(row.reposts),
       likes: safeCount(row.likes),
     })),
+    messaging: {
+      registeredDevices: safeCount(messaging.registeredDevices),
+      onlineDevices: safeCount(messaging.onlineDevices),
+      activeSessions: safeCount(messaging.activeSessions),
+      encryptedSignals: safeCount(messaging.encryptedSignals),
+      expiredSessionBacklog: safeCount(messaging.expiredSessionBacklog),
+    },
     generatedAt: new Date().toISOString(),
     windowDays: METRICS_WINDOW_DAYS,
   };

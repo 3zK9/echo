@@ -18,6 +18,7 @@ test("production CSP uses a nonce without unsafe script or style execution", () 
   assert.doesNotMatch(policy, /'unsafe-inline'/);
   assert.doesNotMatch(policy, /'unsafe-eval'/);
   assert.doesNotMatch(policy, /\bws:/);
+  assert.doesNotMatch(policy, /vercel-insights/);
   assert.match(policy, /upgrade-insecure-requests/);
 });
 

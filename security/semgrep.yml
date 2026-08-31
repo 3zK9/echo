@@ -22,6 +22,81 @@ rules:
       confidence: HIGH
       cwe: CWE-79
 
+  - id: echo.react.no-dangerously-set-inner-html
+    message: Messaging content must render as React text nodes; HTML injection is not allowed.
+    severity: ERROR
+    languages: [javascript, typescript]
+    pattern: <$TAG ... dangerouslySetInnerHTML={$VALUE} ... />
+    paths:
+      include:
+        - "/web/src/lib/p2p/**"
+        - "/web/src/components/p2p/**"
+        - "/web/src/app/messages/**"
+    metadata:
+      category: security
+      confidence: HIGH
+      cwe: CWE-79
+
+  - id: echo.p2p.no-web-storage
+    message: Messaging identities, pins, and content must not persist in Web Storage. The audited short-lived claim-retry ID is the sole exception.
+    severity: ERROR
+    languages: [javascript, typescript]
+    patterns:
+      - pattern-either:
+          - pattern: localStorage.$METHOD(...)
+          - pattern: window.localStorage.$METHOD(...)
+          - pattern: globalThis.localStorage.$METHOD(...)
+          - pattern: sessionStorage.$METHOD(...)
+          - pattern: window.sessionStorage.$METHOD(...)
+          - pattern: globalThis.sessionStorage.$METHOD(...)
+      # This opaque UUID preserves idempotent callee-claim retries after a
+      # reload. It has a ten-minute expiry and never contains text, keys,
+      # envelopes, pins, names, or transcripts.
+      - pattern-not: sessionStorage.getItem(CLAIM_REQUEST_STORAGE_KEY)
+      - pattern-not: sessionStorage.setItem(CLAIM_REQUEST_STORAGE_KEY, ...)
+    paths:
+      include:
+        - "/web/src/lib/p2p/**"
+        - "/web/src/components/p2p/**"
+        - "/web/src/app/messages/**"
+    metadata:
+      category: security
+      confidence: HIGH
+      cwe: CWE-922
+
+  - id: echo.p2p.no-sensitive-console-output
+    message: Messaging code must not log SDP, candidates, envelopes, keys, or message text.
+    severity: ERROR
+    languages: [javascript, typescript]
+    pattern: console.$METHOD(...)
+    paths:
+      include:
+        - "/web/src/lib/p2p/browser.ts"
+        - "/web/src/components/p2p/**"
+        - "/web/src/app/messages/**"
+    metadata:
+      category: security
+      confidence: HIGH
+      cwe: CWE-532
+
+  - id: echo.p2p.no-media-capture-or-tracks
+    message: Echo messaging is data-channel-only; camera, microphone, and media tracks are forbidden.
+    severity: ERROR
+    languages: [javascript, typescript]
+    pattern-either:
+      - pattern: $OBJECT.mediaDevices.getUserMedia(...)
+      - pattern: $CONNECTION.addTrack(...)
+      - pattern: $CONNECTION.addTransceiver(...)
+    paths:
+      include:
+        - "/web/src/lib/p2p/**"
+        - "/web/src/components/p2p/**"
+        - "/web/src/app/messages/**"
+    metadata:
+      category: security
+      confidence: HIGH
+      cwe: CWE-359
+
   - id: echo.prisma.no-unsafe-raw-query
     message: Prisma unsafe raw-query APIs can introduce SQL injection.
     severity: ERROR

@@ -72,16 +72,13 @@ export default function BottomNav() {
           </button>
         )}
         <div className="flex items-center gap-2">
-          <button
-            type="button"
-            disabled
-            title="Coming soon"
-            className="p-2 rounded-full opacity-60 cursor-not-allowed flex items-center gap-1"
-            aria-label="Messages (coming soon)"
+          <Link
+            href="/messages"
+            className="p-2 rounded-full hover:bg-white/10"
+            aria-label="Messages"
           >
             <MessageIcon className="w-7 h-7" />
-            <span className="ml-1 px-1.5 py-0.5 text-[10px] leading-none rounded-full border border-white/20 text-white/70">soon</span>
-          </button>
+          </Link>
         </div>
         <div className="relative" ref={menuRef}>
           <button

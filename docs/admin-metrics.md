@@ -24,6 +24,11 @@ creating the reader. Existing users receive the migration timestamp because
 the prior schema did not retain registration dates; signup history is accurate
 from that migration onward.
 
+The live-messaging migration adds `AdminP2PMessagingHealth`, an aggregate-only
+view of registered/online device counts, active signaling sessions, opaque
+signal rows, and expiry backlog. It conditionally grants that view to the
+existing `echo_metrics_reader`; fresh reader setups should use the grant below.
+
 ## Create the read-only database principal
 
 Run the following as a database owner, replacing the example password. Keep
@@ -39,7 +44,8 @@ CREATE ROLE echo_metrics_app
 
 GRANT CONNECT ON DATABASE postgres TO echo_metrics_app;
 GRANT USAGE ON SCHEMA public TO echo_metrics_reader;
-GRANT SELECT ON "AdminProductTotals", "AdminDailyActivity" TO echo_metrics_reader;
+GRANT SELECT ON "AdminProductTotals", "AdminDailyActivity", "AdminP2PMessagingHealth"
+  TO echo_metrics_reader;
 
 ALTER ROLE echo_metrics_app SET default_transaction_read_only = on;
 ALTER ROLE echo_metrics_app SET statement_timeout = '5s';
@@ -65,6 +71,7 @@ Connect using `METRICS_DATABASE_URL` and confirm:
 SHOW default_transaction_read_only;
 SELECT * FROM "AdminProductTotals";
 SELECT * FROM "AdminDailyActivity" LIMIT 1;
+SELECT * FROM "AdminP2PMessagingHealth";
 
 -- Every statement below must fail.
 SELECT * FROM "User" LIMIT 1;

@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 
-export default async function DMPage() {
-  // Direct Messages are not available yet: guard this route
-  redirect("/?feature=messages-coming-soon");
+export default async function DMPage({ params }: { params: Promise<{ user: string }> }) {
+  const { user } = await params;
+  redirect(`/messages/${encodeURIComponent(user)}`);
 }

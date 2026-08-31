@@ -21,7 +21,6 @@ export function buildContentSecurityPolicy(
   ];
   const connectSources = [
     "'self'",
-    "https://vitals.vercel-insights.com",
     ...(isDevelopment ? ["ws:", "wss:"] : []),
   ];
 

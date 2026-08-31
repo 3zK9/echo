@@ -80,6 +80,31 @@ function ActivityTable({ metrics }: { metrics: AdminProductMetrics }) {
   );
 }
 
+function MessagingHealth({ metrics }: { metrics: AdminProductMetrics }) {
+  const messaging = metrics.messaging;
+  return (
+    <section aria-labelledby="messaging-health-heading">
+      <div className="mb-3">
+        <h2 id="messaging-health-heading" className="text-lg font-semibold">Live messaging health</h2>
+        <p className="mt-1 text-sm text-white/50">
+          Aggregate signaling counts only. No users, peer pairs, keys, connection details, or text are exposed.
+        </p>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+        <MetricCard label="Registered devices" value={messaging.registeredDevices} />
+        <MetricCard label="Online devices" value={messaging.onlineDevices} note="45-second presence" />
+        <MetricCard label="Active sessions" value={messaging.activeSessions} />
+        <MetricCard label="Encrypted signals" value={messaging.encryptedSignals} note="Offer/answer only" />
+        <MetricCard
+          label="Expiry backlog"
+          value={messaging.expiredSessionBacklog}
+          note={messaging.expiredSessionBacklog === 0 ? "Cleanup healthy" : "Investigate cleanup job"}
+        />
+      </div>
+    </section>
+  );
+}
+
 async function readMetrics(): Promise<AdminProductMetrics | null> {
   try {
     return await loadAdminProductMetrics();
@@ -115,6 +140,7 @@ export default async function AdminPage() {
       {metrics ? (
         <div className="space-y-6">
           <Totals totals={metrics.totals} />
+          <MessagingHealth metrics={metrics} />
           <ActivityTable metrics={metrics} />
           <p className="text-xs text-white/35">
             Generated {new Date(metrics.generatedAt).toLocaleString("en-US", { timeZone: "UTC" })} UTC

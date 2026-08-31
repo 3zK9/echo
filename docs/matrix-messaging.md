@@ -1,5 +1,11 @@
 # Text-only encrypted messaging
 
+> **Superseded for the current proof of concept.** Echo is implementing the
+> live-only WebRTC design in `docs/live-p2p-messaging.md` so it does not need to
+> operate a messaging homeserver. This document is retained as the evaluated
+> path if offline delivery, durable history, or multi-device sync is required
+> later. No Matrix infrastructure has been deployed.
+
 This is a separate delivery track from Echo's feed and admin metrics. The old
 Signal-style experiment stays disabled and its `/api/dm/*` routes stay gone;
 Matrix rooms start fresh and no legacy ciphertext is migrated.

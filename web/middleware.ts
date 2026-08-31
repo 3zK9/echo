@@ -25,6 +25,8 @@ function buildCallbackUrl(nextUrl: URL) {
 
 function shouldBypassSetup(pathname: string) {
   return pathname.startsWith("/api/auth") ||
+    pathname === "/api/p2p" ||
+    pathname.startsWith("/api/p2p/") ||
     pathname.startsWith("/_next") ||
     pathname.startsWith("/favicon.ico") ||
     pathname.startsWith("/assets");
@@ -73,6 +75,15 @@ export default async function middleware(req: NextRequest) {
   const isLoggedIn = !!token;
 
   if (!isLoggedIn && !isPublic) {
+    // Messaging polls must fail as JSON when a session expires. Redirecting an
+    // API fetch to the sign-in page turns an authentication failure into an
+    // HTML parse error and can leave the browser appearing to be online.
+    if (pathname === "/api/p2p" || pathname.startsWith("/api/p2p/")) {
+      return protectResponse(NextResponse.json(
+        { error: "unauthorized" },
+        { status: 401, headers: { "Cache-Control": "private, no-store" } },
+      ), contentSecurityPolicy, false);
+    }
     const url = new URL("/", nextUrl);
     url.searchParams.set("callbackUrl", buildCallbackUrl(nextUrl));
     const response = NextResponse.redirect(url);

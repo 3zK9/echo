@@ -3,25 +3,25 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
   directUrl = env("DIRECT_URL")
 }
 
 // NextAuth core models
 model Account {
-  id                String  @id @default(cuid())
-  userId            String
-  type              String
-  provider          String
-  providerAccountId String
-  refresh_token     String?  @db.Text
-  access_token      String?  @db.Text
-  expires_at        Int?
-  token_type        String?
-  scope             String?
-  id_token          String?  @db.Text
-  session_state     String?
+  id                 String  @id @default(cuid())
+  userId             String
+  type               String
+  provider           String
+  providerAccountId  String
+  refresh_token      String? @db.Text
+  access_token       String? @db.Text
+  expires_at         Int?
+  token_type         String?
+  scope              String?
+  id_token           String? @db.Text
+  session_state      String?
   // OIDC
   oauth_token_secret String?
   oauth_token        String?
@@ -42,24 +42,27 @@ model Session {
 }
 
 model User {
-  id             String     @id @default(cuid())
-  name           String?
-  email          String?    @unique
-  emailVerified  DateTime?
-  image          String?
-  createdAt      DateTime   @default(now())
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+  createdAt     DateTime  @default(now())
 
   // App-specific
-  username       String?    @unique
-  echoes         Echo[]
-  likes          EchoLike[]
-  profile        Profile?
-  devices        Device[]
-  sentDMs        DMMessage[] @relation("DMFromUser")
-  receivedDMs    DMMessage[] @relation("DMToUser")
+  username    String?      @unique
+  echoes      Echo[]
+  likes       EchoLike[]
+  profile     Profile?
+  devices     Device[]
+  sentDMs     DMMessage[]  @relation("DMFromUser")
+  receivedDMs DMMessage[]  @relation("DMToUser")
+  rtcDevice   RtcDevice?
+  rtcCalls    RtcSession[] @relation("RtcCallerUser")
+  rtcInvites  RtcSession[] @relation("RtcCalleeUser")
 
-  accounts       Account[]
-  sessions       Session[]
+  accounts Account[]
+  sessions Session[]
 
   @@index([createdAt])
 }
@@ -74,23 +77,23 @@ model VerificationToken {
 
 // App models
 model Echo {
-  id         String   @id @default(cuid())
-  authorId   String
-  author     User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
-  text       String   @db.Text
-  createdAt  DateTime @default(now())
+  id        String   @id @default(cuid())
+  authorId  String
+  author    User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  text      String   @db.Text
+  createdAt DateTime @default(now())
 
   // Reposts: an echo can optionally reference an original echo
   originalId String?
   original   Echo?   @relation("ReEchoes", fields: [originalId], references: [id])
-  reposts   Echo[]  @relation("ReEchoes")
+  reposts    Echo[]  @relation("ReEchoes")
 
   // Replies: an echo can optionally be a reply to another echo
   replyToId String?
   replyTo   Echo?   @relation("Replies", fields: [replyToId], references: [id])
   replies   Echo[]  @relation("Replies")
 
-  likes      EchoLike[]
+  likes EchoLike[]
 
   @@index([authorId, createdAt])
   @@index([createdAt])
@@ -99,10 +102,10 @@ model Echo {
 }
 
 model EchoLike {
-  userId   String
-  echoId   String
-  user     User  @relation(fields: [userId], references: [id], onDelete: Cascade)
-  echo     Echo @relation(fields: [echoId], references: [id], onDelete: Cascade)
+  userId    String
+  echoId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  echo      Echo     @relation(fields: [echoId], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now())
 
   @@id([userId, echoId])
@@ -112,37 +115,36 @@ model EchoLike {
 }
 
 model Profile {
-  userId    String  @id
-  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  bio       String? @db.Text
-  link      String? @db.Text
+  userId    String   @id
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bio       String?  @db.Text
+  link      String?  @db.Text
   updatedAt DateTime @updatedAt
 }
 
-
 // E2EE Signal MVP models
 model Device {
-  id              String   @id // client-assigned device id (e.g., uuid/cuid)
-  userId          String
-  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  registrationId  Int
-  identityKeyPub  String   @db.Text
-  createdAt       DateTime @default(now())
+  id             String   @id // client-assigned device id (e.g., uuid/cuid)
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  registrationId Int
+  identityKeyPub String   @db.Text
+  createdAt      DateTime @default(now())
 
-  signedPreKeys   SignedPreKey[]
-  preKeys         PreKey[]
-  messages        DMMessage[] @relation("SenderDeviceMessages")
+  signedPreKeys SignedPreKey[]
+  preKeys       PreKey[]
+  messages      DMMessage[]    @relation("SenderDeviceMessages")
 
   @@index([userId, createdAt])
 }
 
 model SignedPreKey {
-  deviceId   String
-  device     Device  @relation(fields: [deviceId], references: [id], onDelete: Cascade)
-  keyId      Int
-  pubKey     String  @db.Text
-  signature  String  @db.Text
-  createdAt  DateTime @default(now())
+  deviceId  String
+  device    Device   @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  keyId     Int
+  pubKey    String   @db.Text
+  signature String   @db.Text
+  createdAt DateTime @default(now())
 
   @@id([deviceId, keyId])
   @@index([deviceId, createdAt])
@@ -150,9 +152,9 @@ model SignedPreKey {
 
 model PreKey {
   deviceId   String
-  device     Device  @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  device     Device    @relation(fields: [deviceId], references: [id], onDelete: Cascade)
   keyId      Int
-  pubKey     String  @db.Text
+  pubKey     String    @db.Text
   consumedAt DateTime?
 
   @@id([deviceId, keyId])
@@ -160,19 +162,103 @@ model PreKey {
 }
 
 model DMMessage {
-  id             String   @id @default(cuid())
+  id             String    @id @default(cuid())
   fromUserId     String
   toUserId       String
   senderDeviceId String
-  ciphertext     String   @db.Text
-  sentAt         DateTime @default(now())
+  ciphertext     String    @db.Text
+  sentAt         DateTime  @default(now())
   deliveredAt    DateTime?
   readAt         DateTime?
 
-  fromUser User    @relation("DMFromUser", fields: [fromUserId], references: [id], onDelete: Cascade)
-  toUser   User    @relation("DMToUser", fields: [toUserId], references: [id], onDelete: Cascade)
-  sender   Device  @relation("SenderDeviceMessages", fields: [senderDeviceId], references: [id], onDelete: NoAction)
+  fromUser User   @relation("DMFromUser", fields: [fromUserId], references: [id], onDelete: Cascade)
+  toUser   User   @relation("DMToUser", fields: [toUserId], references: [id], onDelete: Cascade)
+  sender   Device @relation("SenderDeviceMessages", fields: [senderDeviceId], references: [id], onDelete: NoAction)
 
   @@index([fromUserId, toUserId, sentAt])
   @@index([toUserId, sentAt])
+}
+
+// Live-only WebRTC proof. These tables contain public device keys and
+// short-lived encrypted SDP/ICE signaling only. Text messages never use the
+// application database and travel exclusively over RTCDataChannel.
+model RtcDevice {
+  id                 String    @id @default(uuid()) @db.Uuid
+  userId             String    @unique
+  signingPublicKey   String    @db.Text
+  agreementPublicKey String    @db.Text
+  fingerprint        String    @db.VarChar(64)
+  onlineUntil        DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  user            User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  calls           RtcSession[] @relation("RtcCallerDevice")
+  invites         RtcSession[] @relation("RtcCalleeDevice")
+  sentSignals     RtcSignal[]  @relation("RtcSignalSender")
+  receivedSignals RtcSignal[]  @relation("RtcSignalRecipient")
+
+  @@unique([id, userId])
+  @@index([onlineUntil])
+}
+
+enum RtcSessionState {
+  CREATED
+  OFFERED
+  CLAIMED
+  CLOSED
+}
+
+enum RtcSignalPhase {
+  OFFER
+  ANSWER
+}
+
+model RtcSession {
+  id              String          @id @default(uuid()) @db.Uuid
+  callerUserId    String
+  calleeUserId    String
+  callerDeviceId  String          @db.Uuid
+  calleeDeviceId  String          @db.Uuid
+  createRequestId String          @db.Uuid
+  pairKey         String
+  state           RtcSessionState @default(CREATED)
+  createdAt       DateTime        @default(now())
+  expiresAt       DateTime
+  claimedAt       DateTime?
+  claimRequestId  String?         @db.Uuid
+  closedAt        DateTime?
+
+  caller       User        @relation("RtcCallerUser", fields: [callerUserId], references: [id], onDelete: Cascade)
+  callee       User        @relation("RtcCalleeUser", fields: [calleeUserId], references: [id], onDelete: Cascade)
+  callerDevice RtcDevice   @relation("RtcCallerDevice", fields: [callerDeviceId, callerUserId], references: [id, userId], onDelete: Cascade)
+  calleeDevice RtcDevice   @relation("RtcCalleeDevice", fields: [calleeDeviceId, calleeUserId], references: [id, userId], onDelete: Cascade)
+  signals      RtcSignal[]
+
+  @@unique([callerDeviceId, createRequestId])
+  @@index([callerDeviceId, state, expiresAt])
+  @@index([calleeDeviceId, state, expiresAt])
+  @@index([pairKey, state, expiresAt])
+  @@index([expiresAt])
+}
+
+model RtcSignal {
+  id                BigInt         @id @default(autoincrement())
+  sessionId         String         @db.Uuid
+  senderDeviceId    String         @db.Uuid
+  recipientDeviceId String         @db.Uuid
+  sequence          Int
+  phase             RtcSignalPhase
+  envelope          String         @db.Text
+  createdAt         DateTime       @default(now())
+  expiresAt         DateTime
+
+  session         RtcSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  senderDevice    RtcDevice  @relation("RtcSignalSender", fields: [senderDeviceId], references: [id], onDelete: Cascade)
+  recipientDevice RtcDevice  @relation("RtcSignalRecipient", fields: [recipientDeviceId], references: [id], onDelete: Cascade)
+
+  @@unique([sessionId, phase])
+  @@unique([sessionId, senderDeviceId, sequence])
+  @@index([recipientDeviceId, id])
+  @@index([expiresAt])
 }

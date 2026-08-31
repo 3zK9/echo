@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useProfile } from "@/state/profile";
 import { useToast } from "@/components/Toast";
@@ -158,14 +159,13 @@ export default function ProfileHeader({
                     Edit
                   </button>
                 ) : (
-                  <div
-                    className="shrink-0 px-3 py-1.5 rounded-full border border-white/10 text-sm font-semibold opacity-60 cursor-not-allowed select-none flex items-center gap-2"
-                    title="Coming soon"
-                    aria-disabled="true"
+                  <Link
+                    href={`/messages/${encodeURIComponent(username)}`}
+                    prefetch={false}
+                    className="shrink-0 px-3 py-1.5 rounded-full border border-white/10 hover:bg-white/10 text-sm font-semibold"
                   >
-                    <span>Message</span>
-                    <span className="px-1.5 py-0.5 text-[10px] leading-none rounded-full border border-white/20 text-white/70">soon</span>
-                  </div>
+                    Message
+                  </Link>
                 )}
               </div>
             )}
