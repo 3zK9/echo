@@ -1,26 +1,5 @@
 import type { NextConfig } from "next";
 
-const isProd = process.env.NODE_ENV === "production";
-
-const csp = [
-  "default-src 'self'",
-  // Allow inline and blob scripts for Next.js runtime and data hydration
-  // Keep 'unsafe-eval' to support some React/Next internals; remove later if not needed
-  "script-src 'self' 'unsafe-inline' 'unsafe-eval' blob:",
-  "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data: https://avatars.githubusercontent.com https://api.dicebear.com",
-  "font-src 'self' data:",
-  // Allow fetch/XHR to same-origin; include Vercel vitals endpoint if used
-  "connect-src 'self' https://vitals.vercel-insights.com",
-  // Allow web workers if needed by Next/Turbopack
-  "worker-src 'self' blob:",
-  // In dev, also allow WS for HMR
-  ...(isProd ? [] : ["connect-src ws: wss:"]),
-  "frame-ancestors 'none'",
-  "base-uri 'self'",
-  "form-action 'self'",
-].join("; ");
-
 const nextConfig: NextConfig = {
   turbopack: {
     root: process.cwd(),
@@ -40,12 +19,12 @@ const nextConfig: NextConfig = {
     ],
   },
   async headers() {
-    // Always set security headers; CSP is relaxed automatically in dev via directives above
+    // The request-scoped nonce CSP is set in middleware. These headers are
+    // static because their values do not vary per response.
     return [
       {
         source: "/:path*",
         headers: [
-          { key: "Content-Security-Policy", value: csp },
           { key: "X-Frame-Options", value: "DENY" },
           { key: "X-Content-Type-Options", value: "nosniff" },
           { key: "Referrer-Policy", value: "no-referrer" },

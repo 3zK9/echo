@@ -7,6 +7,7 @@ workflow:
     - if: '$CI_PIPELINE_SOURCE == "schedule"'
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
     - if: '$CI_PIPELINE_SOURCE == "web"'
+    - if: '$CI_PIPELINE_SOURCE == "api"'
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
 
 default:
@@ -78,7 +79,9 @@ security:gitleaks:
   script:
     - scripts/ci/install-tools.sh gitleaks
     - |
-      if [[ "$CI_PIPELINE_SOURCE" == "schedule" || "$CI_PIPELINE_SOURCE" == "web" ]]; then
+      if [[ "$CI_PIPELINE_SOURCE" == "schedule" || \
+        "$CI_PIPELINE_SOURCE" == "web" || \
+        "$CI_PIPELINE_SOURCE" == "api" ]]; then
         GITLEAKS_ENFORCE=true scripts/ci/gitleaks.sh full
       elif [[ "$CI_PIPELINE_SOURCE" == "merge_request_event" && \
         -n "${CI_MERGE_REQUEST_DIFF_BASE_SHA:-}" && \
@@ -111,7 +114,9 @@ security:dependencies:
     - scripts/ci/install-tools.sh syft grype
     - scripts/ci/npm-audit.sh runtime
     - |
-      if [[ "$CI_PIPELINE_SOURCE" == "schedule" || "$CI_PIPELINE_SOURCE" == "web" ]]; then
+      if [[ "$CI_PIPELINE_SOURCE" == "schedule" || \
+        "$CI_PIPELINE_SOURCE" == "web" || \
+        "$CI_PIPELINE_SOURCE" == "api" ]]; then
         scripts/ci/npm-audit.sh all
       fi
     - scripts/ci/sbom.sh
@@ -134,6 +139,7 @@ security:trufflehog:
   rules:
     - if: '$CI_PIPELINE_SOURCE == "schedule" && $RUN_TRUFFLEHOG == "true"'
     - if: '$CI_PIPELINE_SOURCE == "web" && $RUN_TRUFFLEHOG == "true"'
+    - if: '$CI_PIPELINE_SOURCE == "api" && $RUN_TRUFFLEHOG == "true"'
     - when: never
   script:
     - scripts/ci/install-tools.sh trufflehog

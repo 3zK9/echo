@@ -7,6 +7,10 @@ import BottomNav from "@/components/BottomNav";
 import { Analytics } from "@vercel/analytics/react";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 
+// A fresh CSP nonce is generated for every request, so pages must be rendered
+// dynamically for Next.js to attach that nonce to scripts and styles.
+export const dynamic = "force-dynamic";
+
 const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],

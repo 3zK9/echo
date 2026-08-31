@@ -2,6 +2,7 @@ import type { NextAuthOptions } from "next-auth";
 import GitHubProvider from "next-auth/providers/github";
 import { PrismaAdapter } from "@next-auth/prisma-adapter";
 import { prisma } from "@/lib/db";
+import { safeSameOriginRedirectUrl } from "@/lib/safe-redirect";
 
 export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(prisma),
@@ -16,7 +17,16 @@ export const authOptions: NextAuthOptions = {
       clientSecret: process.env.AUTH_GITHUB_SECRET as string,
     }),
   ],
+  // Keep auth and error rendering inside the app's nonce-protected UI rather
+  // than NextAuth's generic page, which contains legacy inline styling.
+  pages: {
+    signIn: "/",
+    error: "/",
+  },
   callbacks: {
+    async redirect({ url, baseUrl }) {
+      return safeSameOriginRedirectUrl(url, baseUrl);
+    },
     async jwt({ token, profile, account }) {
       if (account?.provider === "github") {
         const gh = profile as any;

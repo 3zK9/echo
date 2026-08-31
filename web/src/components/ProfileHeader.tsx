@@ -126,8 +126,7 @@ export default function ProfileHeader({
                   onChange={(e) => setDraft(e.target.value.slice(0, MAX_BIO))}
                   rows={3}
                   maxLength={MAX_BIO}
-                  className="w-full rounded-md bg-black/5 dark:bg-white/10 p-2 outline-none resize-none max-h-48 overflow-auto break-words break-all"
-                  style={{ overflowWrap: "anywhere" }}
+                  className="w-full rounded-md bg-black/5 dark:bg-white/10 p-2 outline-none resize-none max-h-48 overflow-auto break-words break-all [overflow-wrap:anywhere]"
                   placeholder="Write a short bio..."
                 />
                 <div className="flex items-center justify-between">
